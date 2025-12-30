@@ -3,9 +3,12 @@
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
+import logging
 
 import msal
 import requests
+
+from errors import retry_on_failure, APIError, NetworkError
 
 
 @dataclass
@@ -31,18 +34,20 @@ class TodoClient:
     GRAPH_API_ENDPOINT = "https://graph.microsoft.com/v1.0"
     SCOPES = ["https://graph.microsoft.com/.default"]
 
-    def __init__(self, client_id: str, tenant_id: str, client_secret: str):
+    def __init__(self, client_id: str, tenant_id: str, client_secret: str, logger: Optional[logging.Logger] = None):
         """Initialize To Do client.
 
         Args:
             client_id: Azure AD application client ID
             tenant_id: Azure AD tenant ID
             client_secret: Azure AD application client secret
+            logger: Optional logger for retry messages
         """
         self.client_id = client_id
         self.tenant_id = tenant_id
         self.client_secret = client_secret
         self.access_token = None
+        self.logger = logger or logging.getLogger(__name__)
 
     def authenticate(self):
         """Authenticate with Microsoft Graph API using client credentials.
@@ -80,36 +85,60 @@ class TodoClient:
         }
 
     def _make_request(
-        self, method: str, endpoint: str, json_data: Optional[dict] = None
+        self, method: str, endpoint: str, json_data: Optional[dict] = None, retry: bool = True
     ) -> dict:
-        """Make HTTP request to Graph API.
+        """Make HTTP request to Graph API with retry logic.
 
         Args:
             method: HTTP method (GET, POST, PATCH, DELETE)
             endpoint: API endpoint (without base URL)
             json_data: Optional JSON data for request body
+            retry: Whether to retry on transient failures
 
         Returns:
             Response JSON
 
         Raises:
-            Exception: If request fails
+            APIError: If request fails
+            NetworkError: If network operation fails
         """
-        url = f"{self.GRAPH_API_ENDPOINT}{endpoint}"
-        response = requests.request(
-            method=method,
-            url=url,
-            headers=self._get_headers(),
-            json=json_data,
-            timeout=30,
-        )
+        def _do_request():
+            url = f"{self.GRAPH_API_ENDPOINT}{endpoint}"
+            try:
+                response = requests.request(
+                    method=method,
+                    url=url,
+                    headers=self._get_headers(),
+                    json=json_data,
+                    timeout=30,
+                )
+            except requests.exceptions.Timeout as e:
+                raise NetworkError(f"Request timed out: {e}")
+            except requests.exceptions.ConnectionError as e:
+                raise NetworkError(f"Connection failed: {e}")
+            except requests.exceptions.RequestException as e:
+                raise NetworkError(f"Network error: {e}")
 
-        if response.status_code >= 400:
-            raise Exception(
-                f"API request failed: {response.status_code} - {response.text}"
-            )
+            if response.status_code >= 500:
+                # Server errors - retryable
+                raise APIError(
+                    f"Server error {response.status_code}: {response.text}"
+                )
+            elif response.status_code == 429:
+                # Rate limiting - retryable
+                raise APIError(f"Rate limited: {response.text}")
+            elif response.status_code >= 400:
+                # Client errors - not retryable
+                raise APIError(
+                    f"API request failed: {response.status_code} - {response.text}"
+                )
 
-        return response.json() if response.content else {}
+            return response.json() if response.content else {}
+
+        if retry:
+            return retry_on_failure(_do_request, max_retries=3, logger=self.logger)
+        else:
+            return _do_request()
 
     def get_task_lists(self) -> list[dict]:
         """Get all To Do lists for the authenticated user.

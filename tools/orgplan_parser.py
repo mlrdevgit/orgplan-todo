@@ -45,6 +45,44 @@ class OrgplanParser:
             self.content = f.read()
             self.lines = self.content.splitlines()
 
+    def validate(self) -> list[str]:
+        """Validate orgplan file format.
+
+        Returns:
+            List of validation warnings (empty if valid)
+        """
+        warnings = []
+
+        if not self.lines:
+            self.load()
+
+        # Check for TODO List section
+        has_todo_section = False
+        for line in self.lines:
+            if line.strip() == "# TODO List":
+                has_todo_section = True
+                break
+
+        if not has_todo_section:
+            warnings.append("File is missing '# TODO List' section")
+
+        # Check for malformed task lines
+        in_todo_section = False
+        for i, line in enumerate(self.lines, 1):
+            if line.strip() == "# TODO List":
+                in_todo_section = True
+                continue
+            elif in_todo_section and line.startswith("# "):
+                in_todo_section = False
+
+            if in_todo_section and line.strip() and not line.startswith("- "):
+                if not line.startswith("#"):  # Allow headers
+                    warnings.append(
+                        f"Line {i}: TODO List section should only contain task items (starting with '- ')"
+                    )
+
+        return warnings
+
     def parse_tasks(self) -> list[OrgplanTask]:
         """Parse all tasks from the TODO List section.
 
