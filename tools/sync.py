@@ -160,6 +160,7 @@ def main():
             config.client_id,
             config.tenant_id,
             config.client_secret,
+            logger=logger,
         )
         todo_client.authenticate()
         logger.info("Authentication successful")
@@ -180,6 +181,16 @@ def main():
         logger.info("Initializing orgplan parser...")
         orgplan_parser = OrgplanParser(config.orgplan_file)
         orgplan_parser.load()
+
+        # Validate orgplan file format
+        logger.info("Validating orgplan file format...")
+        warnings = orgplan_parser.validate()
+        if warnings:
+            logger.warning("Orgplan file format warnings:")
+            for warning in warnings:
+                logger.warning(f"  - {warning}")
+        else:
+            logger.info("Orgplan file format is valid")
 
         # Initialize sync engine
         logger.info("Initializing sync engine...")
