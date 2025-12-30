@@ -1,0 +1,9 @@
+# Core dependencies
+msal>=1.24.0                    # Microsoft Authentication Library
+requests>=2.31.0                # HTTP client for Graph API
+python-dotenv>=1.0.0            # Environment variable management
+
+# Development dependencies
+pytest>=7.4.0                   # Testing framework
+black>=23.0.0                   # Code formatting
+pylint>=2.17.0                  # Code linting
