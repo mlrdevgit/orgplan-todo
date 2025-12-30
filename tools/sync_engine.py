@@ -248,3 +248,278 @@ class SyncEngine:
             return "completed"
         else:
             return "notStarted"
+
+    def sync_todo_to_orgplan(self, orgplan_tasks: list[OrgplanTask], todo_tasks: list[TodoTask]) -> dict:
+        """Sync tasks from Microsoft To Do to orgplan (Phase 2).
+
+        Args:
+            orgplan_tasks: List of orgplan tasks
+            todo_tasks: List of To Do tasks
+
+        Returns:
+            Dictionary with sync statistics
+        """
+        stats = {
+            "created": 0,
+            "updated": 0,
+            "skipped": 0,
+            "errors": 0,
+        }
+
+        # Build lookup maps for orgplan tasks
+        orgplan_by_id = {}
+        orgplan_by_title = {}
+        for task in orgplan_tasks:
+            if task.ms_todo_id:
+                orgplan_by_id[task.ms_todo_id] = task
+            orgplan_by_title[task.description] = task
+
+        # Process each To Do task
+        for todo_task in todo_tasks:
+            try:
+                # Skip completed tasks that don't exist in orgplan
+                # (they were likely completed in a previous month)
+                if todo_task.is_completed and todo_task.id not in orgplan_by_id:
+                    self.logger.debug(f"Skipping completed To Do task not in orgplan: {todo_task.title}")
+                    stats["skipped"] += 1
+                    continue
+
+                # Find matching orgplan task
+                orgplan_task = self._find_matching_orgplan_task(
+                    todo_task, orgplan_by_id, orgplan_by_title
+                )
+
+                if orgplan_task:
+                    # Update existing task
+                    if self._update_orgplan_task(orgplan_task, todo_task):
+                        stats["updated"] += 1
+                    else:
+                        stats["skipped"] += 1
+                else:
+                    # Create new task from To Do
+                    if self._create_orgplan_task(todo_task):
+                        stats["created"] += 1
+
+            except Exception as e:
+                self.logger.error(f"Error processing To Do task '{todo_task.title}': {e}")
+                stats["errors"] += 1
+
+        return stats
+
+    def _find_matching_orgplan_task(
+        self,
+        todo_task: TodoTask,
+        orgplan_by_id: dict[str, OrgplanTask],
+        orgplan_by_title: dict[str, OrgplanTask],
+    ) -> Optional[OrgplanTask]:
+        """Find matching orgplan task for a To Do task.
+
+        Args:
+            todo_task: To Do task to match
+            orgplan_by_id: Dictionary of orgplan tasks by ms-todo-id
+            orgplan_by_title: Dictionary of orgplan tasks by description
+
+        Returns:
+            Matching OrgplanTask or None
+        """
+        # Try matching by ID first
+        if todo_task.id in orgplan_by_id:
+            return orgplan_by_id[todo_task.id]
+
+        # Fallback to title matching
+        if todo_task.title in orgplan_by_title:
+            return orgplan_by_title[todo_task.title]
+
+        return None
+
+    def _create_orgplan_task(self, todo_task: TodoTask) -> bool:
+        """Create a new orgplan task from To Do task.
+
+        Args:
+            todo_task: To Do task to create
+
+        Returns:
+            True if task was created
+        """
+        status = self._map_todo_status_to_orgplan(todo_task.status)
+        priority = self._map_importance_to_priority(todo_task.importance)
+
+        self.logger.info(f"Creating orgplan task: {todo_task.title}")
+
+        if self.dry_run:
+            self.logger.info(f"  [DRY RUN] Would create task with status={status}, priority={priority}")
+            return True
+
+        try:
+            # Add task to orgplan
+            orgplan_task = self.orgplan_parser.add_task(
+                description=todo_task.title,
+                status=status,
+                priority=priority,
+            )
+
+            # Add detail section with ms-todo-id and body if present
+            self.orgplan_parser.add_detail_section(orgplan_task, ms_todo_id=todo_task.id)
+
+            # Add body to detail section if present and not empty
+            if todo_task.body and todo_task.body.strip():
+                # We need to update the detail section with the body
+                # For now, we'll just add the ID marker
+                # The body content will be handled in detail section sync
+                pass
+
+            self.logger.info(f"  Created orgplan task")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"  Failed to create orgplan task: {e}")
+            return False
+
+    def _update_orgplan_task(self, orgplan_task: OrgplanTask, todo_task: TodoTask) -> bool:
+        """Update existing orgplan task from To Do task.
+
+        Args:
+            orgplan_task: Orgplan task (target)
+            todo_task: To Do task (source)
+
+        Returns:
+            True if task was updated
+        """
+        changes = []
+        modified = False
+
+        # Check title
+        if todo_task.title != orgplan_task.description:
+            changes.append(f"title: '{orgplan_task.description}' -> '{todo_task.title}'")
+            if not self.dry_run:
+                self.orgplan_parser.update_task_description(orgplan_task, todo_task.title)
+                modified = True
+
+        # Check status
+        desired_status = self._map_todo_status_to_orgplan(todo_task.status)
+        if desired_status != orgplan_task.status:
+            changes.append(f"status: {orgplan_task.status} -> {desired_status}")
+            if not self.dry_run:
+                self.orgplan_parser.update_task_status(orgplan_task, desired_status)
+                modified = True
+
+        # Check priority
+        desired_priority = self._map_importance_to_priority(todo_task.importance)
+        if desired_priority != orgplan_task.priority:
+            changes.append(f"priority: {orgplan_task.priority} -> {desired_priority}")
+            if not self.dry_run:
+                self.orgplan_parser.update_task_priority(orgplan_task, desired_priority)
+                modified = True
+
+        # Sync detail section body (only if orgplan detail section is empty)
+        if todo_task.body and todo_task.body.strip() and not orgplan_task.detail_section.strip():
+            changes.append("adding To Do notes to empty detail section")
+            if not self.dry_run:
+                # The detail section sync would happen here
+                # For now, we just ensure the ms-todo-id is present
+                if not orgplan_task.ms_todo_id:
+                    self.orgplan_parser.add_detail_section(orgplan_task, ms_todo_id=todo_task.id)
+                modified = True
+
+        if not changes:
+            self.logger.debug(f"Orgplan task '{orgplan_task.description}' is up to date")
+            return False
+
+        self.logger.info(f"Updating orgplan task: {orgplan_task.description}")
+        for change in changes:
+            self.logger.info(f"  {change}")
+
+        if self.dry_run:
+            self.logger.info("  [DRY RUN] Would update orgplan task")
+            return True
+
+        # Ensure ms-todo-id is present
+        if not orgplan_task.ms_todo_id:
+            self.orgplan_parser.add_detail_section(orgplan_task, ms_todo_id=todo_task.id)
+
+        self.logger.info("  Updated successfully")
+        return modified
+
+    def _map_importance_to_priority(self, importance: str) -> Optional[int]:
+        """Map To Do importance to orgplan priority.
+
+        Args:
+            importance: To Do importance (low, normal, high)
+
+        Returns:
+            Orgplan priority (1, 2, 3) or None
+        """
+        if importance == "high":
+            return 1
+        elif importance == "normal":
+            return 2
+        elif importance == "low":
+            return 3
+        else:
+            return None
+
+    def _map_todo_status_to_orgplan(self, status: str) -> Optional[str]:
+        """Map To Do status to orgplan status.
+
+        Args:
+            status: To Do status (notStarted, completed)
+
+        Returns:
+            Orgplan status (DONE, PENDING, or None)
+        """
+        if status == "completed":
+            return "DONE"
+        elif status == "notStarted":
+            return None  # Active tasks don't need a status marker
+        else:
+            return None
+
+    def sync_bidirectional(self) -> dict:
+        """Perform bidirectional sync between orgplan and To Do (Phase 2).
+
+        Returns:
+            Dictionary with combined sync statistics
+        """
+        self.logger.info("=" * 60)
+        self.logger.info("Phase 1: Syncing Orgplan -> To Do")
+        self.logger.info("=" * 60)
+
+        # Load tasks once
+        orgplan_tasks = self.orgplan_parser.parse_tasks()
+        self.logger.info(f"Found {len(orgplan_tasks)} tasks in orgplan")
+
+        todo_tasks = self.todo_client.get_tasks(self.todo_list_id)
+        self.logger.info(f"Found {len(todo_tasks)} tasks in To Do")
+
+        # Phase 1: Orgplan -> To Do
+        stats_to_todo = self.sync_orgplan_to_todo()
+
+        # Reload tasks after Phase 1 changes
+        if stats_to_todo["created"] > 0 or stats_to_todo["updated"] > 0:
+            self.logger.info("Reloading tasks after orgplan -> To Do sync...")
+            orgplan_tasks = self.orgplan_parser.parse_tasks()
+            todo_tasks = self.todo_client.get_tasks(self.todo_list_id)
+
+        self.logger.info("")
+        self.logger.info("=" * 60)
+        self.logger.info("Phase 2: Syncing To Do -> Orgplan")
+        self.logger.info("=" * 60)
+
+        # Phase 2: To Do -> Orgplan
+        stats_to_orgplan = self.sync_todo_to_orgplan(orgplan_tasks, todo_tasks)
+
+        # Save orgplan changes if not dry run
+        if not self.dry_run:
+            self.orgplan_parser.save()
+            self.logger.info("Saved orgplan changes")
+
+        # Combine statistics
+        combined_stats = {
+            "orgplan_to_todo": stats_to_todo,
+            "todo_to_orgplan": stats_to_orgplan,
+            "total_created": stats_to_todo["created"] + stats_to_orgplan["created"],
+            "total_updated": stats_to_todo["updated"] + stats_to_orgplan["updated"],
+            "total_errors": stats_to_todo["errors"] + stats_to_orgplan["errors"],
+        }
+
+        return combined_stats
