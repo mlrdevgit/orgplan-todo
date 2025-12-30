@@ -189,17 +189,38 @@ Tasks are matched between systems using:
 
 ## Automated Sync with Cron
 
-### Setup Cron Job
+### Quick Setup (Recommended)
+
+Use the automated setup script:
+```bash
+cd orgplan-todo
+TODO_LIST_NAME="Orgplan 2025" SCHEDULE="*/30 * * * *" tools/setup_cron.sh
+```
+
+This script will:
+- Validate your `.env` file exists
+- Create a cron job with your specified schedule
+- Set up logging to `sync.log`
+- Handle concurrent execution prevention
+
+### Manual Setup
 
 Run sync every hour:
 ```bash
-0 * * * * cd ~/orgplan && python tools/sync.py --todo-list "Orgplan 2025" >> cron.log 2>&1
+0 * * * * cd ~/orgplan && python tools/sync.py --todo-list "Orgplan 2025" --log-file sync.log 2>&1
 ```
 
-Run every 30 minutes with logging:
+Run every 30 minutes:
 ```bash
-*/30 * * * * cd ~/orgplan && python tools/sync.py --todo-list "Orgplan 2025" --log-file sync.log
+*/30 * * * * cd ~/orgplan && python tools/sync.py --todo-list "Orgplan 2025" --log-file sync.log 2>&1
 ```
+
+### Concurrent Execution Prevention
+
+The sync automatically uses file-based locking to prevent concurrent runs:
+- Lock file: `sync.lock` in orgplan directory
+- Stale locks (>1 hour old) are automatically cleaned up
+- Lock is always released, even on errors or interruption
 
 ## Error Handling
 
@@ -249,15 +270,19 @@ See [PLAN.md](PLAN.md) for the complete project plan.
 - Status, priority, and title sync both directions
 - New task creation from both systems
 
-### Phase 3: Robustness (Planned)
-- Conflict detection and resolution
-- File logging
+### Phase 3: Robustness ✓
+- Custom error class hierarchy
+- Retry logic with exponential backoff
+- Orgplan file format validation
+- API error classification
 - Enhanced error handling
 
-### Phase 4: Automation (Planned)
-- Cron integration
-- Lock file for concurrent runs
-- Email notifications
+### Phase 4: Automation ✓
+- File-based locking for concurrent prevention
+- Cron setup script (tools/setup_cron.sh)
+- Automated lock cleanup
+- Stale lock detection
+- Production-ready for scheduled execution
 
 ### Phase 5: Polish (Planned)
 - Comprehensive documentation

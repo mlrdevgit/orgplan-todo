@@ -10,6 +10,7 @@ from config import create_config_from_args
 from orgplan_parser import OrgplanParser
 from sync_engine import SyncEngine
 from todo_client import TodoClient
+from locking import SyncLock
 
 
 def setup_logging(log_file: str = None, verbose: bool = False):
@@ -153,6 +154,15 @@ def main():
     logger.info(f"Orgplan file: {config.orgplan_file}")
     logger.info(f"To Do list: {config.todo_list_name}")
 
+    # Acquire lock to prevent concurrent runs
+    lock_file = config.orgplan_dir / "sync.lock"
+    lock = SyncLock(lock_file, logger)
+
+    if not lock.acquire(timeout=0, stale_threshold=3600):
+        logger.error("Failed to acquire lock. Another sync may be running.")
+        logger.error(f"If no other sync is running, remove: {lock_file}")
+        sys.exit(1)
+
     try:
         # Initialize components
         logger.info("Authenticating with Microsoft Graph API...")
@@ -246,6 +256,9 @@ def main():
     except Exception as e:
         logger.error(f"Sync failed: {e}", exc_info=args.verbose)
         sys.exit(1)
+    finally:
+        # Always release the lock
+        lock.release()
 
 
 if __name__ == "__main__":
