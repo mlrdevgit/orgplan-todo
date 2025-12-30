@@ -190,21 +190,35 @@ def main():
             dry_run=config.dry_run,
         )
 
-        # Perform sync
+        # Perform bidirectional sync
         logger.info("=" * 60)
-        logger.info("Starting sync: Orgplan -> To Do")
+        logger.info("Starting bidirectional sync")
         logger.info("=" * 60)
 
-        stats = sync_engine.sync_orgplan_to_todo()
+        stats = sync_engine.sync_bidirectional()
 
         # Print summary
+        logger.info("")
         logger.info("=" * 60)
         logger.info("Sync completed!")
         logger.info("=" * 60)
-        logger.info(f"Tasks created:  {stats['created']}")
-        logger.info(f"Tasks updated:  {stats['updated']}")
-        logger.info(f"Tasks skipped:  {stats['skipped']}")
-        logger.info(f"Errors:         {stats['errors']}")
+        logger.info("")
+        logger.info("Orgplan -> To Do:")
+        logger.info(f"  Created:  {stats['orgplan_to_todo']['created']}")
+        logger.info(f"  Updated:  {stats['orgplan_to_todo']['updated']}")
+        logger.info(f"  Skipped:  {stats['orgplan_to_todo']['skipped']}")
+        logger.info(f"  Errors:   {stats['orgplan_to_todo']['errors']}")
+        logger.info("")
+        logger.info("To Do -> Orgplan:")
+        logger.info(f"  Created:  {stats['todo_to_orgplan']['created']}")
+        logger.info(f"  Updated:  {stats['todo_to_orgplan']['updated']}")
+        logger.info(f"  Skipped:  {stats['todo_to_orgplan']['skipped']}")
+        logger.info(f"  Errors:   {stats['todo_to_orgplan']['errors']}")
+        logger.info("")
+        logger.info("Total:")
+        logger.info(f"  Created:  {stats['total_created']}")
+        logger.info(f"  Updated:  {stats['total_updated']}")
+        logger.info(f"  Errors:   {stats['total_errors']}")
 
         if config.dry_run:
             logger.info("")
@@ -212,7 +226,7 @@ def main():
             logger.info("Run without --dry-run to apply changes")
 
         # Exit with error code if there were errors
-        if stats["errors"] > 0:
+        if stats["total_errors"] > 0:
             sys.exit(1)
 
     except KeyboardInterrupt:

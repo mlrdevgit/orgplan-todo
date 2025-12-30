@@ -4,10 +4,12 @@ Synchronize tasks between your orgplan productivity system and Microsoft To Do u
 
 ## Features
 
-- **Bidirectional sync** between orgplan markdown files and Microsoft To Do (Phase 1: orgplan → To Do)
+- **Bidirectional sync** between orgplan markdown files and Microsoft To Do
 - **Intelligent task matching** using unique IDs and title fallback
-- **Status synchronization** (DONE, PENDING, DELEGATED → Completed/Active)
-- **Priority mapping** (#p1 → High, #p2 → Normal, #p3+ → Low)
+- **Status synchronization** in both directions (DONE ↔ Completed, PENDING/Active)
+- **Priority mapping** (#p1 ↔ High, #p2 ↔ Normal, #p3+ ↔ Low)
+- **New task creation** from either system
+- **Detail section sync** with orgplan taking precedence
 - **Dry-run mode** to preview changes before applying
 - **Flexible configuration** via CLI, environment variables, or .env file
 
@@ -142,7 +144,7 @@ Each monthly file starts with a `# TODO List` section:
 - **Time estimates**: `#1h`, `#2h`, `#1d` (ignored by sync)
 - **#blocked**: Indicates blocked task (ignored by sync)
 
-## Sync Behavior (Phase 1 MVP)
+## Sync Behavior (Bidirectional - Phase 2)
 
 ### Orgplan → To Do
 
@@ -154,11 +156,36 @@ Each monthly file starts with a `# TODO List` section:
 - Tasks with existing `<!-- ms-todo-id: X -->` are matched by ID
 - Tasks without ID are matched by title
 
+### To Do → Orgplan
+
+- New tasks in To Do → Created in orgplan TODO list
+- Task completed in To Do → Mark `[DONE]` in orgplan
+- Title changes → Update task description
+- Importance changes → Update priority tags
+  - `high` → `#p1`
+  - `normal` → `#p2`
+  - `low` → `#p3`
+- To Do notes → Added to detail section (only if orgplan detail section is empty)
+
+### Task Matching
+
+Tasks are matched between systems using:
+1. **Primary:** `ms-todo-id` marker in orgplan detail section
+2. **Fallback:** Exact title matching (case-sensitive)
+
+### Detail Section Sync
+
+- **Orgplan takes precedence:** If orgplan has content in the detail section, it is NOT overwritten by To Do notes
+- **Empty orgplan detail:** To Do notes can be synced to empty orgplan detail sections
+- The `<!-- ms-todo-id: X -->` marker is always maintained for task matching
+
 ### Excluded from Sync
 
-- Tasks already marked `[DONE]` in orgplan
+- Tasks already marked `[DONE]` in prior monthly files
+- Completed To Do tasks not present in current orgplan (likely from previous months)
 - Time estimates (`#1h`, `#2h`, `#1d`)
 - `#blocked` tag
+- Task deletions (ignored in both directions)
 
 ## Automated Sync with Cron
 
@@ -215,10 +242,12 @@ See [PLAN.md](PLAN.md) for the complete project plan.
 - Basic task matching
 - Console logging
 
-### Phase 2: Bidirectional Sync (Planned)
+### Phase 2: Bidirectional Sync ✓
 - To Do → Orgplan sync
-- Task ID markers
-- Detail section sync
+- Task ID markers with fallback to title matching
+- Detail section sync (orgplan takes precedence)
+- Status, priority, and title sync both directions
+- New task creation from both systems
 
 ### Phase 3: Robustness (Planned)
 - Conflict detection and resolution
