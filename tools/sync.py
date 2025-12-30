@@ -117,6 +117,11 @@ Examples:
         action="store_true",
         help="Preview changes without applying them",
     )
+    sync_group.add_argument(
+        "--validate-config",
+        action="store_true",
+        help="Validate configuration and exit (no sync)",
+    )
 
     # Logging
     log_group = parser.add_argument_group("logging")
@@ -146,6 +151,37 @@ def main():
     # Create configuration
     logger.info("Loading configuration...")
     config = create_config_from_args(args)
+
+    # If validating config only, exit after validation
+    if args.validate_config:
+        logger.info("=" * 60)
+        logger.info("Configuration Validation")
+        logger.info("=" * 60)
+        logger.info(f"✓ Client ID: {config.client_id[:10]}...")
+        logger.info(f"✓ Tenant ID: {config.tenant_id[:10]}...")
+        logger.info(f"✓ Client Secret: ***{config.client_secret[-4:]}")
+        logger.info(f"✓ Orgplan directory: {config.orgplan_dir}")
+        logger.info(f"✓ Orgplan file: {config.orgplan_file}")
+        logger.info(f"✓ To Do list name: {config.todo_list_name}")
+        logger.info(f"✓ Month: {config.month}")
+
+        # Validate orgplan file
+        from orgplan_parser import OrgplanParser
+        parser = OrgplanParser(config.orgplan_file)
+        parser.load()
+        warnings = parser.validate()
+
+        if warnings:
+            logger.warning("Orgplan file format warnings:")
+            for warning in warnings:
+                logger.warning(f"  - {warning}")
+        else:
+            logger.info("✓ Orgplan file format is valid")
+
+        logger.info("=" * 60)
+        logger.info("Configuration is valid!")
+        logger.info("=" * 60)
+        return
 
     if config.dry_run:
         logger.info("DRY RUN MODE: No changes will be applied")

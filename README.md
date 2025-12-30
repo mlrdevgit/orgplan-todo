@@ -42,7 +42,7 @@ You'll need an Azure AD app registration with the following:
 - Client Secret
 - Permissions: `Tasks.ReadWrite`
 
-> **Note:** Detailed setup instructions will be added in a future update.
+📖 **[Complete Setup Guide](docs/GRAPH_API_SETUP.md)** - Step-by-step instructions with screenshots
 
 ### Configuration Options
 
@@ -254,6 +254,29 @@ Verify your Microsoft Graph API credentials are correct:
 - Client Secret
 - App has `Tasks.ReadWrite` permission
 
+## Documentation
+
+- 📖 **[Microsoft Graph API Setup Guide](docs/GRAPH_API_SETUP.md)** - Complete setup instructions
+- 🔧 **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)** - Common issues and solutions
+- 📋 **[Example Workflows](docs/WORKFLOWS.md)** - Daily, weekly, and advanced usage patterns
+- 📝 **[Project Plan](PLAN.md)** - Complete technical specification
+
+### Quick Commands
+
+```bash
+# Validate configuration
+python tools/sync.py --validate-config
+
+# Test sync (no changes)
+python tools/sync.py --todo-list "Orgplan 2025" --dry-run
+
+# Full sync with logging
+python tools/sync.py --todo-list "Orgplan 2025" -v --log-file sync.log
+
+# Setup automated sync
+TODO_LIST_NAME="Orgplan 2025" tools/setup_cron.sh
+```
+
 ## Development Roadmap
 
 See [PLAN.md](PLAN.md) for the complete project plan.
@@ -284,10 +307,13 @@ See [PLAN.md](PLAN.md) for the complete project plan.
 - Stale lock detection
 - Production-ready for scheduled execution
 
-### Phase 5: Polish (Planned)
-- Comprehensive documentation
-- Graph API setup guide
-- Configuration validation
+### Phase 5: Polish & Documentation ✓
+- Microsoft Graph API setup guide (docs/GRAPH_API_SETUP.md)
+- Troubleshooting guide (docs/TROUBLESHOOTING.md)
+- Example workflows documentation (docs/WORKFLOWS.md)
+- Configuration validation command (--validate-config)
+- Comprehensive README with quick commands
+- Production-ready with full documentation
 
 ## Contributing
 
