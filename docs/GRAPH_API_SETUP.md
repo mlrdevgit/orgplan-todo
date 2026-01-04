@@ -190,30 +190,6 @@ python tools/sync.py --todo-list "Orgplan 2025" --auth-mode delegated --dry-run
 
 You'll see:
 ```
-======================================================================
-AUTHENTICATION REQUIRED
-======================================================================
-To sign in, use a web browser to open the page https://microsoft.com/devicelogin
-and enter the code ABCD1234 to authenticate.
-======================================================================
-
-Waiting for authentication...
-```
-
-1. Your browser should open automatically
-2. Enter the code shown in the terminal
-3. Sign in with your Microsoft account
-4. Grant the requested permissions
-5. Return to the terminal
-
-After successful authentication:
-```
-✓ Authentication successful!
-Tokens have been saved for future use.
-```
-
-**Subsequent syncs** will use the cached tokens automatically - no login required!
-
 ## Troubleshooting
 
 ### "Authentication failed" Error
