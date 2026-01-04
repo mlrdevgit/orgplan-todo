@@ -35,7 +35,7 @@ class MicrosoftTodoBackend(TaskBackend):
         client_secret: Optional[str] = None,
         token_storage_path: Optional[Path] = None,
         allow_prompt: bool = True,
-        logger: Optional[logging.Logger] = None
+        logger: Optional[logging.Logger] = None,
     ):
         """Initialize Microsoft To Do backend.
 
@@ -67,7 +67,9 @@ class MicrosoftTodoBackend(TaskBackend):
             raise ValueError("client_secret is required for application mode")
 
         if self.auth_mode not in ["application", "delegated"]:
-            raise ValueError(f"Invalid auth_mode: {auth_mode}. Must be 'application' or 'delegated'")
+            raise ValueError(
+                f"Invalid auth_mode: {auth_mode}. Must be 'application' or 'delegated'"
+            )
 
     @property
     def backend_name(self) -> str:
@@ -123,10 +125,7 @@ class MicrosoftTodoBackend(TaskBackend):
         refresh_token = self.token_storage.get_refresh_token()
         if refresh_token:
             self.logger.info("Attempting to refresh access token...")
-            result = app.acquire_token_by_refresh_token(
-                refresh_token,
-                scopes=self.SCOPES_DELEGATED
-            )
+            result = app.acquire_token_by_refresh_token(refresh_token, scopes=self.SCOPES_DELEGATED)
 
             if "access_token" in result:
                 self.access_token = result["access_token"]
@@ -134,7 +133,7 @@ class MicrosoftTodoBackend(TaskBackend):
                 self.token_storage.save_tokens(
                     access_token=result["access_token"],
                     refresh_token=result.get("refresh_token", refresh_token),
-                    expires_in=result.get("expires_in")
+                    expires_in=result.get("expires_in"),
                 )
                 self.logger.info("Successfully refreshed access token")
                 return
@@ -184,7 +183,7 @@ class MicrosoftTodoBackend(TaskBackend):
             self.token_storage.save_tokens(
                 access_token=result["access_token"],
                 refresh_token=result.get("refresh_token"),
-                expires_in=result.get("expires_in")
+                expires_in=result.get("expires_in"),
             )
 
             print("\n✓ Authentication successful!")
@@ -208,6 +207,7 @@ class MicrosoftTodoBackend(TaskBackend):
         self, method: str, endpoint: str, json_data: Optional[dict] = None, retry: bool = True
     ) -> dict:
         """Make HTTP request to Graph API with retry logic."""
+
         def _do_request():
             url = f"{self.GRAPH_API_ENDPOINT}{endpoint}"
             try:
@@ -257,10 +257,7 @@ class MicrosoftTodoBackend(TaskBackend):
         result = self._make_request("GET", f"/me/todo/lists/{list_id}/tasks")
         tasks = result.get("value", [])
 
-        return [
-            self._api_to_task_item(task)
-            for task in tasks
-        ]
+        return [self._api_to_task_item(task) for task in tasks]
 
     def create_task(self, list_id: str, task: TaskItem) -> TaskItem:
         """Create a new task in a To Do list."""
@@ -294,9 +291,7 @@ class MicrosoftTodoBackend(TaskBackend):
         if task.body is not None:
             task_data["body"] = {"contentType": "text", "content": task.body}
 
-        result = self._make_request(
-            "PATCH", f"/me/todo/lists/{list_id}/tasks/{task.id}", task_data
-        )
+        result = self._make_request("PATCH", f"/me/todo/lists/{list_id}/tasks/{task.id}", task_data)
         return self._api_to_task_item(result)
 
     def delete_task(self, list_id: str, task_id: str) -> None:

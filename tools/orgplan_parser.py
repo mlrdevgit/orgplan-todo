@@ -280,11 +280,7 @@ class OrgplanParser:
             status_match = self.STATUS_PATTERN.search(new_line)
             if status_match:
                 insert_pos = status_match.end()
-                new_line = (
-                    new_line[:insert_pos]
-                    + f" #p{new_priority}"
-                    + new_line[insert_pos:]
-                )
+                new_line = new_line[:insert_pos] + f" #p{new_priority}" + new_line[insert_pos:]
             else:
                 new_line = f"- #p{new_priority} {new_line[2:]}"
 
@@ -292,7 +288,9 @@ class OrgplanParser:
         task.raw_line = self.lines[line_idx]
         task.priority = new_priority
 
-    def add_task(self, description: str, status: Optional[str] = None, priority: Optional[int] = None) -> OrgplanTask:
+    def add_task(
+        self, description: str, status: Optional[str] = None, priority: Optional[int] = None
+    ) -> OrgplanTask:
         """Add a new task to the TODO list section.
 
         Args:
@@ -372,8 +370,8 @@ class OrgplanParser:
 
         # Mapping of backend ID names to their patterns and marker formats
         id_mappings = {
-            'ms_todo_id': (self.MS_TODO_ID_PATTERN, "ms-todo-id"),
-            'google_tasks_id': (self.GOOGLE_TASKS_ID_PATTERN, "google-tasks-id"),
+            "ms_todo_id": (self.MS_TODO_ID_PATTERN, "ms-todo-id"),
+            "google_tasks_id": (self.GOOGLE_TASKS_ID_PATTERN, "google-tasks-id"),
         }
 
         # Add or update backend ID markers

@@ -19,6 +19,7 @@ def create_backend(backend_type: str, config, logger) -> TaskBackend:
     """
     if backend_type == "microsoft":
         from .microsoft_todo import MicrosoftTodoBackend
+
         return MicrosoftTodoBackend(
             client_id=config.client_id,
             tenant_id=config.tenant_id,
@@ -30,6 +31,7 @@ def create_backend(backend_type: str, config, logger) -> TaskBackend:
         )
     elif backend_type == "google":
         from .google_tasks import GoogleTasksBackend
+
         return GoogleTasksBackend(
             client_id=config.google_client_id,
             client_secret=config.google_client_secret,
@@ -39,8 +41,7 @@ def create_backend(backend_type: str, config, logger) -> TaskBackend:
         )
     else:
         raise ValueError(
-            f"Unknown backend type: {backend_type}. "
-            f"Supported backends: 'microsoft', 'google'"
+            f"Unknown backend type: {backend_type}. " f"Supported backends: 'microsoft', 'google'"
         )
 
 

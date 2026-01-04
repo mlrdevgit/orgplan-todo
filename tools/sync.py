@@ -161,7 +161,8 @@ Examples:
         help="Path to log file (console always logs)",
     )
     log_group.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Enable verbose (debug) logging",
     )
@@ -202,6 +203,7 @@ def main():
 
         # Validate orgplan file
         from orgplan_parser import OrgplanParser
+
         parser = OrgplanParser(config.orgplan_file)
         parser.load()
         warnings = parser.validate()
@@ -236,7 +238,9 @@ def main():
 
     try:
         # Initialize backend
-        backend_name = config.backend.title() + (" To Do" if config.backend == "microsoft" else " Tasks")
+        backend_name = config.backend.title() + (
+            " To Do" if config.backend == "microsoft" else " Tasks"
+        )
         auth_info = f" ({config.auth_mode} mode)" if config.backend == "microsoft" else ""
         logger.info(f"Authenticating with {backend_name}{auth_info}...")
 
@@ -261,7 +265,7 @@ def main():
                 logger.error(f"  - {lst.get('displayName') or lst.get('title')}")
             sys.exit(1)
 
-        list_name = task_list.get('displayName') or task_list.get('title')
+        list_name = task_list.get("displayName") or task_list.get("title")
         logger.info(f"Found list: {list_name} (ID: {task_list['id']})")
 
         # Initialize orgplan parser
