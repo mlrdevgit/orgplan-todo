@@ -1,33 +1,33 @@
-"""Sync engine for orgplan and Microsoft To Do."""
+"""Sync engine for orgplan and task backends."""
 
 import logging
 from typing import Optional
 
+from backends.base import TaskBackend, TaskItem
 from orgplan_parser import OrgplanParser, OrgplanTask
-from todo_client import TodoClient, TodoTask
 
 
 class SyncEngine:
-    """Coordinates synchronization between orgplan and To Do."""
+    """Coordinates synchronization between orgplan and task backend."""
 
     def __init__(
         self,
         orgplan_parser: OrgplanParser,
-        todo_client: TodoClient,
-        todo_list_id: str,
+        backend: TaskBackend,
+        task_list_id: str,
         dry_run: bool = False,
     ):
         """Initialize sync engine.
 
         Args:
             orgplan_parser: Parser for orgplan file
-            todo_client: Client for Microsoft To Do
-            todo_list_id: ID of the To Do list to sync with
+            backend: Task backend (Microsoft To Do, Google Tasks, etc.)
+            task_list_id: ID of the task list to sync with
             dry_run: If True, preview changes without applying
         """
         self.orgplan_parser = orgplan_parser
-        self.todo_client = todo_client
-        self.todo_list_id = todo_list_id
+        self.backend = backend
+        self.task_list_id = task_list_id
         self.dry_run = dry_run
         self.logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ class SyncEngine:
 
         # Load To Do tasks
         self.logger.info("Loading To Do tasks...")
-        todo_tasks = self.todo_client.get_tasks(self.todo_list_id)
+        todo_tasks = self.backend.get_tasks(self.task_list_id)
         self.logger.info(f"Found {len(todo_tasks)} tasks in To Do")
 
         # Build lookup maps
@@ -97,9 +97,9 @@ class SyncEngine:
     def _find_matching_todo_task(
         self,
         orgplan_task: OrgplanTask,
-        todo_by_id: dict[str, TodoTask],
-        todo_by_title: dict[str, TodoTask],
-    ) -> Optional[TodoTask]:
+        todo_by_id: dict[str, TaskItem],
+        todo_by_title: dict[str, TaskItem],
+    ) -> Optional[TaskItem]:
         """Find matching To Do task for an orgplan task.
 
         Args:
@@ -108,7 +108,7 @@ class SyncEngine:
             todo_by_title: Dictionary of To Do tasks by title
 
         Returns:
-            Matching TodoTask or None
+            Matching TaskItem or None
         """
         # Try matching by ms-todo-id first
         if orgplan_task.ms_todo_id and orgplan_task.ms_todo_id in todo_by_id:
@@ -139,16 +139,22 @@ class SyncEngine:
             return True
 
         try:
-            todo_task = self.todo_client.create_task(
-                self.todo_list_id,
+            # Create TaskItem for new task
+            task_item = TaskItem(
+                id="",  # Will be assigned by backend
                 title=title,
+                status="active",
                 importance=importance,
+                body=None,
             )
 
-            # Add ms-todo-id to orgplan
-            self.orgplan_parser.add_detail_section(orgplan_task, ms_todo_id=todo_task.id)
+            created_task = self.backend.create_task(self.task_list_id, task_item)
 
-            self.logger.info(f"  Created task with ID: {todo_task.id}")
+            # Add backend ID to orgplan
+            id_marker = {f"{self.backend.id_marker_prefix.replace('-', '_')}": created_task.id}
+            self.orgplan_parser.add_detail_section(orgplan_task, **id_marker)
+
+            self.logger.info(f"  Created task with ID: {created_task.id}")
             return True
 
         except Exception as e:
@@ -156,7 +162,7 @@ class SyncEngine:
             return False
 
     def _update_todo_task(
-        self, orgplan_task: OrgplanTask, todo_task: TodoTask
+        self, orgplan_task: OrgplanTask, todo_task: TaskItem
     ) -> bool:
         """Update existing To Do task from orgplan task.
 
@@ -200,15 +206,22 @@ class SyncEngine:
             return True
 
         try:
-            self.todo_client.update_task(
-                self.todo_list_id,
-                todo_task.id,
-                **updates,
+            # Create updated TaskItem
+            updated_task = TaskItem(
+                id=todo_task.id,
+                title=updates.get("title", todo_task.title),
+                status=updates.get("status", todo_task.status),
+                importance=updates.get("importance", todo_task.importance),
+                body=todo_task.body,
             )
 
-            # Ensure ms-todo-id is in orgplan
-            if not orgplan_task.ms_todo_id:
-                self.orgplan_parser.add_detail_section(orgplan_task, ms_todo_id=todo_task.id)
+            self.backend.update_task(self.task_list_id, updated_task)
+
+            # Ensure backend ID is in orgplan
+            backend_id_attr = self.backend.id_marker_prefix.replace('-', '_')
+            if not getattr(orgplan_task, backend_id_attr, None):
+                id_marker = {backend_id_attr: todo_task.id}
+                self.orgplan_parser.add_detail_section(orgplan_task, **id_marker)
 
             self.logger.info("  Updated successfully")
             return True
@@ -236,20 +249,20 @@ class SyncEngine:
             return "low"
 
     def _map_orgplan_status_to_todo(self, status: Optional[str]) -> str:
-        """Map orgplan status to To Do status.
+        """Map orgplan status to backend task status.
 
         Args:
             status: Orgplan status (DONE, DELEGATED, PENDING, or None)
 
         Returns:
-            To Do status (notStarted, completed)
+            Backend status (active, completed)
         """
         if status in ["DONE", "DELEGATED"]:
             return "completed"
         else:
-            return "notStarted"
+            return "active"
 
-    def sync_todo_to_orgplan(self, orgplan_tasks: list[OrgplanTask], todo_tasks: list[TodoTask]) -> dict:
+    def sync_todo_to_orgplan(self, orgplan_tasks: list[OrgplanTask], todo_tasks: list[TaskItem]) -> dict:
         """Sync tasks from Microsoft To Do to orgplan (Phase 2).
 
         Args:
@@ -308,7 +321,7 @@ class SyncEngine:
 
     def _find_matching_orgplan_task(
         self,
-        todo_task: TodoTask,
+        todo_task: TaskItem,
         orgplan_by_id: dict[str, OrgplanTask],
         orgplan_by_title: dict[str, OrgplanTask],
     ) -> Optional[OrgplanTask]:
@@ -332,7 +345,7 @@ class SyncEngine:
 
         return None
 
-    def _create_orgplan_task(self, todo_task: TodoTask) -> bool:
+    def _create_orgplan_task(self, todo_task: TaskItem) -> bool:
         """Create a new orgplan task from To Do task.
 
         Args:
@@ -375,7 +388,7 @@ class SyncEngine:
             self.logger.error(f"  Failed to create orgplan task: {e}")
             return False
 
-    def _update_orgplan_task(self, orgplan_task: OrgplanTask, todo_task: TodoTask) -> bool:
+    def _update_orgplan_task(self, orgplan_task: OrgplanTask, todo_task: TaskItem) -> bool:
         """Update existing orgplan task from To Do task.
 
         Args:
@@ -459,17 +472,17 @@ class SyncEngine:
             return None
 
     def _map_todo_status_to_orgplan(self, status: str) -> Optional[str]:
-        """Map To Do status to orgplan status.
+        """Map backend task status to orgplan status.
 
         Args:
-            status: To Do status (notStarted, completed)
+            status: Backend status (active, completed)
 
         Returns:
             Orgplan status (DONE, PENDING, or None)
         """
         if status == "completed":
             return "DONE"
-        elif status == "notStarted":
+        elif status == "active":
             return None  # Active tasks don't need a status marker
         else:
             return None
@@ -488,7 +501,7 @@ class SyncEngine:
         orgplan_tasks = self.orgplan_parser.parse_tasks()
         self.logger.info(f"Found {len(orgplan_tasks)} tasks in orgplan")
 
-        todo_tasks = self.todo_client.get_tasks(self.todo_list_id)
+        todo_tasks = self.backend.get_tasks(self.task_list_id)
         self.logger.info(f"Found {len(todo_tasks)} tasks in To Do")
 
         # Phase 1: Orgplan -> To Do
@@ -498,7 +511,7 @@ class SyncEngine:
         if stats_to_todo["created"] > 0 or stats_to_todo["updated"] > 0:
             self.logger.info("Reloading tasks after orgplan -> To Do sync...")
             orgplan_tasks = self.orgplan_parser.parse_tasks()
-            todo_tasks = self.todo_client.get_tasks(self.todo_list_id)
+            todo_tasks = self.backend.get_tasks(self.task_list_id)
 
         self.logger.info("")
         self.logger.info("=" * 60)

@@ -14,11 +14,17 @@ class Config:
 
     def __init__(
         self,
-        client_id: str,
-        tenant_id: str,
-        todo_list_name: str,
+        backend: str = "microsoft",
+        # Microsoft To Do parameters
+        client_id: Optional[str] = None,
+        tenant_id: Optional[str] = None,
         auth_mode: str = "application",
         client_secret: Optional[str] = None,
+        # Google Tasks parameters
+        google_client_id: Optional[str] = None,
+        google_client_secret: Optional[str] = None,
+        # Common parameters
+        task_list_name: Optional[str] = None,
         token_storage_path: Optional[str] = None,
         allow_prompt: bool = True,
         orgplan_dir: str = ".",
@@ -29,29 +35,42 @@ class Config:
         """Initialize configuration.
 
         Args:
-            client_id: Microsoft Graph API client ID
-            tenant_id: Microsoft Graph API tenant ID
-            todo_list_name: Name of the Microsoft To Do list to sync
-            auth_mode: Authentication mode ("application" or "delegated")
-            client_secret: Microsoft Graph API client secret (required for application mode)
-            token_storage_path: Path to store tokens (for delegated mode, default: .tokens/)
+            backend: Task backend ("microsoft" or "google")
+            client_id: Microsoft Graph API client ID (for Microsoft backend)
+            tenant_id: Microsoft Graph API tenant ID (for Microsoft backend)
+            auth_mode: Authentication mode for Microsoft ("application" or "delegated")
+            client_secret: Client secret (for Microsoft application mode)
+            google_client_id: Google OAuth client ID (for Google backend)
+            google_client_secret: Google OAuth client secret (for Google backend)
+            task_list_name: Name of the task list to sync
+            token_storage_path: Path to store tokens (default: .tokens/)
             allow_prompt: Allow interactive authentication prompts (False for cron)
             orgplan_dir: Root directory for orgplan files (default: current directory)
             month: Month to sync in YYYY-MM format (default: current month)
             dry_run: If True, preview changes without applying
             log_file: Optional log file path
         """
+        self.backend = backend.lower()
+        # Microsoft-specific
         self.client_id = client_id
         self.tenant_id = tenant_id
         self.auth_mode = auth_mode.lower()
         self.client_secret = client_secret
+        # Google-specific
+        self.google_client_id = google_client_id
+        self.google_client_secret = google_client_secret
+        # Common
+        self.task_list_name = task_list_name
         self.token_storage_path = Path(token_storage_path) if token_storage_path else None
         self.allow_prompt = allow_prompt
-        self.todo_list_name = todo_list_name
         self.orgplan_dir = Path(orgplan_dir).resolve()
         self.month = month or datetime.now().strftime("%Y-%m")
         self.dry_run = dry_run
         self.log_file = log_file
+
+        # Backward compatibility aliases
+        self.todo_list_name = task_list_name
+        self.google_task_list_name = task_list_name
 
         # Derive orgplan file path
         year, month_num = self.month.split("-")
@@ -65,21 +84,35 @@ class Config:
         """
         errors = []
 
-        if not self.client_id:
-            errors.append("Microsoft Client ID is required")
-        if not self.tenant_id:
-            errors.append("Microsoft Tenant ID is required")
+        # Validate backend
+        if self.backend not in ["microsoft", "google"]:
+            errors.append(f"Invalid backend: {self.backend} (must be 'microsoft' or 'google')")
+            return errors  # Return early if backend is invalid
 
-        # Validate auth mode
-        if self.auth_mode not in ["application", "delegated"]:
-            errors.append(f"Invalid auth mode: {self.auth_mode} (must be 'application' or 'delegated')")
+        # Backend-specific validation
+        if self.backend == "microsoft":
+            if not self.client_id:
+                errors.append("Microsoft Client ID is required (set MS_CLIENT_ID)")
+            if not self.tenant_id:
+                errors.append("Microsoft Tenant ID is required (set MS_TENANT_ID)")
 
-        # Client secret only required for application mode
-        if self.auth_mode == "application" and not self.client_secret:
-            errors.append("Microsoft Client Secret is required for application mode")
+            # Validate auth mode
+            if self.auth_mode not in ["application", "delegated"]:
+                errors.append(f"Invalid auth mode: {self.auth_mode} (must be 'application' or 'delegated')")
 
-        if not self.todo_list_name:
-            errors.append("To Do list name is required")
+            # Client secret only required for application mode
+            if self.auth_mode == "application" and not self.client_secret:
+                errors.append("Microsoft Client Secret is required for application mode (set MS_CLIENT_SECRET)")
+
+        elif self.backend == "google":
+            if not self.google_client_id:
+                errors.append("Google Client ID is required (set GOOGLE_CLIENT_ID)")
+            if not self.google_client_secret:
+                errors.append("Google Client Secret is required (set GOOGLE_CLIENT_SECRET)")
+
+        # Common validation
+        if not self.task_list_name:
+            errors.append("Task list name is required (set TODO_LIST_NAME or GOOGLE_TASK_LIST_NAME)")
 
         if not self.orgplan_dir.exists():
             errors.append(f"Orgplan directory does not exist: {self.orgplan_dir}")
@@ -109,14 +142,22 @@ def load_config_from_env() -> dict:
     # Load .env file if it exists
     load_dotenv()
 
+    backend = os.getenv("TASK_BACKEND", "microsoft")
+
     return {
+        "backend": backend,
+        # Microsoft-specific
         "client_id": os.getenv("MS_CLIENT_ID"),
         "tenant_id": os.getenv("MS_TENANT_ID"),
         "auth_mode": os.getenv("AUTH_MODE", "application"),
         "client_secret": os.getenv("MS_CLIENT_SECRET"),
+        # Google-specific
+        "google_client_id": os.getenv("GOOGLE_CLIENT_ID"),
+        "google_client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
+        # Common
+        "task_list_name": os.getenv("TODO_LIST_NAME") or os.getenv("GOOGLE_TASK_LIST_NAME"),
         "token_storage_path": os.getenv("TOKEN_STORAGE_PATH"),
         "orgplan_dir": os.getenv("ORGPLAN_DIR", "."),
-        "todo_list_name": os.getenv("TODO_LIST_NAME"),
         "month": os.getenv("SYNC_MONTH"),
         "log_file": os.getenv("LOG_FILE"),
     }
@@ -140,19 +181,28 @@ def create_config_from_args(args) -> Config:
     # Determine allow_prompt (inverted from no_prompt flag)
     allow_prompt = not getattr(args, 'no_prompt', False)
 
+    # Get task list name (support both --todo-list and --task-list)
+    task_list = getattr(args, 'task_list', None) or getattr(args, 'todo_list', None) or env_config.get("task_list_name")
+
     # CLI args override environment variables
     config = Config(
-        client_id=args.client_id or env_config.get("client_id"),
-        tenant_id=args.tenant_id or env_config.get("tenant_id"),
+        backend=getattr(args, 'backend', None) or env_config.get("backend", "microsoft"),
+        # Microsoft-specific
+        client_id=getattr(args, 'client_id', None) or env_config.get("client_id"),
+        tenant_id=getattr(args, 'tenant_id', None) or env_config.get("tenant_id"),
         auth_mode=getattr(args, 'auth_mode', None) or env_config.get("auth_mode", "application"),
-        client_secret=args.client_secret or env_config.get("client_secret"),
+        client_secret=getattr(args, 'client_secret', None) or env_config.get("client_secret"),
+        # Google-specific
+        google_client_id=env_config.get("google_client_id"),
+        google_client_secret=env_config.get("google_client_secret"),
+        # Common
+        task_list_name=task_list,
         token_storage_path=getattr(args, 'token_storage_path', None) or env_config.get("token_storage_path"),
         allow_prompt=allow_prompt,
-        todo_list_name=args.todo_list or env_config.get("todo_list_name"),
-        orgplan_dir=args.orgplan_dir or env_config.get("orgplan_dir", "."),
-        month=args.month or env_config.get("month"),
-        dry_run=args.dry_run,
-        log_file=args.log_file or env_config.get("log_file"),
+        orgplan_dir=getattr(args, 'orgplan_dir', None) or env_config.get("orgplan_dir", "."),
+        month=getattr(args, 'month', None) or env_config.get("month"),
+        dry_run=getattr(args, 'dry_run', False),
+        log_file=getattr(args, 'log_file', None) or env_config.get("log_file"),
     )
 
     # Validate configuration
