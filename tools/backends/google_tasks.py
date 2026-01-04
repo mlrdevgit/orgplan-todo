@@ -199,8 +199,26 @@ class GoogleTasksBackend(TaskBackend):
 
         def _get_lists():
             try:
-                results = self.service.tasklists().list().execute()
-                return results.get("items", [])
+                all_lists = []
+                page_token = None
+
+                # Paginate through all results
+                while True:
+                    request = self.service.tasklists().list(
+                        maxResults=100, pageToken=page_token
+                    )
+                    results = request.execute()
+
+                    # Add lists from this page
+                    lists = results.get("items", [])
+                    all_lists.extend(lists)
+
+                    # Check if there are more pages
+                    page_token = results.get("nextPageToken")
+                    if not page_token:
+                        break
+
+                return all_lists
             except HttpError as e:
                 raise self._handle_api_error(e)
 
@@ -233,13 +251,32 @@ class GoogleTasksBackend(TaskBackend):
 
         def _get_tasks():
             try:
-                results = (
-                    self.service.tasks()
-                    .list(tasklist=list_id, showCompleted=True, showHidden=True)
-                    .execute()
-                )
-                tasks = results.get("items", [])
-                return [self._api_to_task_item(task) for task in tasks]
+                all_tasks = []
+                page_token = None
+
+                # Paginate through all results
+                while True:
+                    # Request with pagination
+                    request = self.service.tasks().list(
+                        tasklist=list_id,
+                        showCompleted=True,
+                        showHidden=True,
+                        maxResults=100,  # Maximum allowed per page
+                        pageToken=page_token,
+                    )
+                    results = request.execute()
+
+                    # Add tasks from this page
+                    tasks = results.get("items", [])
+                    all_tasks.extend(tasks)
+
+                    # Check if there are more pages
+                    page_token = results.get("nextPageToken")
+                    if not page_token:
+                        break  # No more pages
+
+                # Convert all tasks to TaskItem objects
+                return [self._api_to_task_item(task) for task in all_tasks]
             except HttpError as e:
                 raise self._handle_api_error(e)
 
