@@ -82,6 +82,78 @@ python tools/sync.py --todo-list "Orgplan 2025" --month 2025-12
 
 ## Authentication Issues
 
+### Delegated Authentication Issues
+
+#### "Authentication required but interactive prompt is disabled (--no-prompt)"
+
+**Symptoms:**
+```
+Exception: Authentication required but interactive prompt is disabled (--no-prompt).
+Run sync manually without --no-prompt to authenticate.
+```
+
+**Cause:** Using `--no-prompt` flag (for cron) but tokens have expired or don't exist
+
+**Solution:**
+```bash
+# First, authenticate interactively without --no-prompt
+python tools/sync.py --todo-list "Orgplan 2025" --auth-mode delegated --dry-run
+
+# After successful login, cron jobs with --no-prompt will work
+```
+
+#### "Device code expired"
+
+**Symptoms:**
+```
+Authentication failed: AADSTS50126: Error validating credentials
+```
+
+**Cause:** Took too long to enter device code (timeout is typically 15 minutes)
+
+**Solution:**
+- Run the sync command again
+- Complete the authentication within 15 minutes
+- Browser should open automatically - if not, manually open the URL shown
+
+#### "Cached token expired, refresh failed"
+
+**Symptoms:**
+```
+WARNING: Failed to refresh token, interactive login required
+```
+
+**Cause:** Refresh token has expired (typically after 90 days of inactivity)
+
+**Solution:**
+```bash
+# Delete old tokens and re-authenticate
+rm -rf .tokens/
+python tools/sync.py --todo-list "Orgplan 2025" --auth-mode delegated
+```
+
+#### Token permission denied
+
+**Symptoms:**
+```
+PermissionError: [Errno 13] Permission denied: '.tokens/tokens.json'
+```
+
+**Cause:** Incorrect file permissions on token storage
+
+**Solution:**
+```bash
+# Fix permissions
+chmod 700 .tokens/
+chmod 600 .tokens/tokens.json
+
+# Or remove and re-authenticate
+rm -rf .tokens/
+python tools/sync.py --todo-list "Orgplan 2025" --auth-mode delegated
+```
+
+### Application Authentication Issues
+
 ### "Authentication failed: AADSTS700016"
 
 **Symptoms:**

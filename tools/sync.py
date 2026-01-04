@@ -53,14 +53,20 @@ def parse_arguments():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Sync with default configuration from .env
+  # Sync with default configuration from .env (application mode)
   python sync.py --todo-list "Orgplan 2025"
+
+  # Sync using delegated authentication (user login)
+  python sync.py --todo-list "Orgplan 2025" --auth-mode delegated
 
   # Dry run to preview changes
   python sync.py --todo-list "Orgplan 2025" --dry-run
 
   # Sync specific month with logging
   python sync.py --todo-list "Work Tasks 2025" --month 2025-11 --log-file sync.log
+
+  # Cron job (delegated auth, no interactive prompts)
+  python sync.py --todo-list "Orgplan 2025" --auth-mode delegated --no-prompt --log-file sync.log
 
   # Override configuration
   python sync.py \\
@@ -82,6 +88,12 @@ Examples:
     # Authentication
     auth_group = parser.add_argument_group("authentication")
     auth_group.add_argument(
+        "--auth-mode",
+        type=str,
+        choices=["application", "delegated"],
+        help="Authentication mode: 'application' (client credentials) or 'delegated' (user login). Default: application",
+    )
+    auth_group.add_argument(
         "--client-id",
         type=str,
         help="Microsoft Graph API client ID (or set MS_CLIENT_ID env var)",
@@ -94,7 +106,17 @@ Examples:
     auth_group.add_argument(
         "--client-secret",
         type=str,
-        help="Microsoft Graph API client secret (or set MS_CLIENT_SECRET env var)",
+        help="Microsoft Graph API client secret (required for application mode, or set MS_CLIENT_SECRET env var)",
+    )
+    auth_group.add_argument(
+        "--token-storage-path",
+        type=str,
+        help="Path to store authentication tokens (for delegated mode, default: .tokens/)",
+    )
+    auth_group.add_argument(
+        "--no-prompt",
+        action="store_true",
+        help="Disable interactive authentication prompts (for cron jobs). Exit with error if re-authentication needed.",
     )
 
     # Orgplan configuration
@@ -157,9 +179,14 @@ def main():
         logger.info("=" * 60)
         logger.info("Configuration Validation")
         logger.info("=" * 60)
+        logger.info(f"✓ Authentication mode: {config.auth_mode}")
         logger.info(f"✓ Client ID: {config.client_id[:10]}...")
         logger.info(f"✓ Tenant ID: {config.tenant_id[:10]}...")
-        logger.info(f"✓ Client Secret: ***{config.client_secret[-4:]}")
+        if config.auth_mode == "application":
+            logger.info(f"✓ Client Secret: ***{config.client_secret[-4:]}")
+        else:
+            logger.info(f"✓ Token storage: {config.token_storage_path or '.tokens/'}")
+            logger.info(f"✓ Allow prompt: {config.allow_prompt}")
         logger.info(f"✓ Orgplan directory: {config.orgplan_dir}")
         logger.info(f"✓ Orgplan file: {config.orgplan_file}")
         logger.info(f"✓ To Do list name: {config.todo_list_name}")
@@ -201,11 +228,14 @@ def main():
 
     try:
         # Initialize components
-        logger.info("Authenticating with Microsoft Graph API...")
+        logger.info(f"Authenticating with Microsoft Graph API ({config.auth_mode} mode)...")
         todo_client = TodoClient(
-            config.client_id,
-            config.tenant_id,
-            config.client_secret,
+            client_id=config.client_id,
+            tenant_id=config.tenant_id,
+            auth_mode=config.auth_mode,
+            client_secret=config.client_secret,
+            token_storage_path=config.token_storage_path,
+            allow_prompt=config.allow_prompt,
             logger=logger,
         )
         todo_client.authenticate()

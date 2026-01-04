@@ -5,11 +5,13 @@ Synchronize tasks between your orgplan productivity system and Microsoft To Do u
 ## Features
 
 - **Bidirectional sync** between orgplan markdown files and Microsoft To Do
+- **Two authentication modes**: Application (client credentials) or Delegated (user login)
 - **Intelligent task matching** using unique IDs and title fallback
 - **Status synchronization** in both directions (DONE ↔ Completed, PENDING/Active)
 - **Priority mapping** (#p1 ↔ High, #p2 ↔ Normal, #p3+ ↔ Low)
 - **New task creation** from either system
 - **Detail section sync** with orgplan taking precedence
+- **Automated sync** with file locking and cron support
 - **Dry-run mode** to preview changes before applying
 - **Flexible configuration** via CLI, environment variables, or .env file
 
@@ -36,13 +38,21 @@ cp .env.example .env
 
 ### Microsoft Graph API Setup
 
-You'll need an Azure AD app registration with the following:
-- Client ID
-- Tenant ID
-- Client Secret
-- Permissions: `Tasks.ReadWrite`
+This tool supports two authentication modes:
 
-📖 **[Complete Setup Guide](docs/GRAPH_API_SETUP.md)** - Step-by-step instructions with screenshots
+**1. Application Mode (Client Credentials)**
+- Best for: Server automation, background sync
+- Requires: Client ID, Tenant ID, Client Secret
+- Requires: Admin consent for API permissions
+- No user interaction after setup
+
+**2. Delegated Mode (User Login)**
+- Best for: Personal use, single-user scenarios
+- Requires: Client ID, Tenant ID only (no secret)
+- No admin consent required
+- One-time interactive login, then tokens cached
+
+📖 **[Complete Setup Guide](docs/GRAPH_API_SETUP.md)** - Step-by-step instructions for both modes
 
 ### Configuration Options
 
@@ -53,9 +63,12 @@ Configuration can be provided via (in order of precedence):
 
 | Parameter | CLI Option | Env Var | Required | Default |
 |-----------|------------|---------|----------|---------|
+| Auth Mode | `--auth-mode` | `AUTH_MODE` | No | `application` |
 | Client ID | `--client-id` | `MS_CLIENT_ID` | Yes | - |
 | Tenant ID | `--tenant-id` | `MS_TENANT_ID` | Yes | - |
-| Client Secret | `--client-secret` | `MS_CLIENT_SECRET` | Yes | - |
+| Client Secret | `--client-secret` | `MS_CLIENT_SECRET` | Application mode only | - |
+| Token Storage | `--token-storage-path` | `TOKEN_STORAGE_PATH` | No | `.tokens/` |
+| Allow Prompt | `--no-prompt` | - | No | `true` |
 | To Do List Name | `--todo-list` | `TODO_LIST_NAME` | Yes | - |
 | Orgplan Directory | `--orgplan-dir` | `ORGPLAN_DIR` | No | `.` (current) |
 | Month | `--month` | `SYNC_MONTH` | No | Current month |
@@ -63,10 +76,20 @@ Configuration can be provided via (in order of precedence):
 
 ## Usage
 
-### Basic Sync
+### Basic Sync (Application Mode)
 
 ```bash
 python tools/sync.py --todo-list "Orgplan 2025"
+```
+
+### Delegated Mode (User Login)
+
+```bash
+# First-time: Interactive login required
+python tools/sync.py --todo-list "Orgplan 2025" --auth-mode delegated
+
+# Subsequent runs: Uses cached tokens
+python tools/sync.py --todo-list "Orgplan 2025" --auth-mode delegated
 ```
 
 ### Dry Run (Preview Changes)
@@ -85,6 +108,13 @@ python tools/sync.py --todo-list "Orgplan 2025" --month 2025-11
 
 ```bash
 python tools/sync.py --todo-list "Orgplan 2025" --log-file sync.log
+```
+
+### Automated Sync (Cron Job)
+
+```bash
+# For delegated mode, use --no-prompt to prevent blocking
+python tools/sync.py --todo-list "Orgplan 2025" --auth-mode delegated --no-prompt --log-file sync.log
 ```
 
 ### Override Configuration
