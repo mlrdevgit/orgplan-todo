@@ -9,7 +9,7 @@ from datetime import datetime
 from config import create_config_from_args
 from orgplan_parser import OrgplanParser
 from sync_engine import SyncEngine
-from todo_client import TodoClient
+from backends import create_backend
 from locking import SyncLock
 
 
@@ -78,11 +78,19 @@ Examples:
         """,
     )
 
+    # Backend selection
+    parser.add_argument(
+        "--backend",
+        type=str,
+        choices=["microsoft", "google"],
+        help="Task backend to use: 'microsoft' (To Do) or 'google' (Tasks). Default: from TASK_BACKEND env or 'microsoft'",
+    )
+
     # Required arguments
     parser.add_argument(
         "--todo-list",
         type=str,
-        help="Name of the Microsoft To Do list to sync with (required)",
+        help="Name of the task list to sync with (required)",
     )
 
     # Authentication
@@ -227,31 +235,34 @@ def main():
         sys.exit(1)
 
     try:
-        # Initialize components
-        logger.info(f"Authenticating with Microsoft Graph API ({config.auth_mode} mode)...")
-        todo_client = TodoClient(
-            client_id=config.client_id,
-            tenant_id=config.tenant_id,
-            auth_mode=config.auth_mode,
-            client_secret=config.client_secret,
-            token_storage_path=config.token_storage_path,
-            allow_prompt=config.allow_prompt,
-            logger=logger,
-        )
-        todo_client.authenticate()
+        # Initialize backend
+        backend_name = config.backend.title() + (" To Do" if config.backend == "microsoft" else " Tasks")
+        auth_info = f" ({config.auth_mode} mode)" if config.backend == "microsoft" else ""
+        logger.info(f"Authenticating with {backend_name}{auth_info}...")
+
+        backend = create_backend(config.backend, config, logger)
+        backend.authenticate()
         logger.info("Authentication successful")
 
-        # Get To Do list
-        logger.info(f"Finding To Do list '{config.todo_list_name}'...")
-        todo_list = todo_client.get_list_by_name(config.todo_list_name)
-        if not todo_list:
-            logger.error(f"To Do list '{config.todo_list_name}' not found")
+        # Get task list
+        logger.info(f"Finding task list '{config.task_list_name}'...")
+        task_list = backend.get_list_by_name(config.task_list_name)
+
+        # For Google Tasks, use primary list if name not specified or not found
+        if not task_list and config.backend == "google" and not config.task_list_name:
+            logger.info("No task list specified, using primary list...")
+            all_lists = backend.get_task_lists()
+            task_list = all_lists[0] if all_lists else None
+
+        if not task_list:
+            logger.error(f"Task list '{config.task_list_name}' not found")
             logger.error("Available lists:")
-            for lst in todo_client.get_task_lists():
-                logger.error(f"  - {lst.get('displayName')}")
+            for lst in backend.get_task_lists():
+                logger.error(f"  - {lst.get('displayName') or lst.get('title')}")
             sys.exit(1)
 
-        logger.info(f"Found list: {todo_list['displayName']} (ID: {todo_list['id']})")
+        list_name = task_list.get('displayName') or task_list.get('title')
+        logger.info(f"Found list: {list_name} (ID: {task_list['id']})")
 
         # Initialize orgplan parser
         logger.info("Initializing orgplan parser...")
@@ -272,8 +283,8 @@ def main():
         logger.info("Initializing sync engine...")
         sync_engine = SyncEngine(
             orgplan_parser=orgplan_parser,
-            todo_client=todo_client,
-            todo_list_id=todo_list["id"],
+            backend=backend,
+            task_list_id=task_list["id"],
             dry_run=config.dry_run,
         )
 
