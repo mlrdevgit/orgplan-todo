@@ -2,11 +2,29 @@
 
 This guide walks you through setting up a Microsoft Azure AD application for accessing Microsoft To Do via the Graph API.
 
+## Authentication Modes
+
+This tool supports two authentication modes:
+
+1. **Application Mode (Client Credentials)**
+   - Uses client ID, tenant ID, and client secret
+   - Requires admin consent for API permissions
+   - Best for: Server automation, background sync
+   - No user interaction required after setup
+
+2. **Delegated Mode (User Login)**
+   - Uses client ID and tenant ID only (no client secret)
+   - No admin consent required
+   - Best for: Personal use, single-user scenarios
+   - Requires one-time interactive login, then tokens are cached
+
+Choose the mode that best fits your use case. Instructions for both are provided below.
+
 ## Prerequisites
 
 - A Microsoft account (personal or work/school)
 - Access to Azure Portal
-- Administrator privileges (for some steps)
+- Administrator privileges (only required for Application Mode)
 
 ## Step 1: Create Azure AD Application
 
@@ -42,7 +60,11 @@ After registration, you'll see the application overview page.
    - This is your `MS_TENANT_ID`
    - Example format: `87654321-4321-4321-4321-cba987654321`
 
-## Step 3: Create Client Secret
+## Step 3: Create Client Secret (Application Mode Only)
+
+**Skip this step if using Delegated Mode.**
+
+For Application Mode:
 
 1. In the left menu, click **Certificates & secrets**
 2. Click **+ New client secret**
@@ -59,22 +81,34 @@ After registration, you'll see the application overview page.
 
 ## Step 4: Configure API Permissions
 
+Choose the permission type based on your authentication mode:
+
+### For Application Mode (Client Credentials)
+
 1. In the left menu, click **API permissions**
 2. Click **+ Add a permission**
 3. Select **Microsoft Graph**
-4. Select **Application permissions** (not Delegated permissions)
-5. Search for and select these permissions:
+4. Select **Application permissions**
+5. Search for and select:
    - **Tasks.ReadWrite** - Read and write tasks and task lists
 6. Click **Add permissions**
-
-### Grant Admin Consent
-
-**Important**: Application permissions require admin consent.
-
-1. Click **Grant admin consent for [your organization]**
-2. Click **Yes** to confirm
+7. Click **Grant admin consent for [your organization]**
+8. Click **Yes** to confirm
 
 You should see green checkmarks indicating consent has been granted.
+
+### For Delegated Mode (User Login)
+
+1. In the left menu, click **API permissions**
+2. Click **+ Add a permission**
+3. Select **Microsoft Graph**
+4. Select **Delegated permissions**
+5. Search for and select:
+   - **Tasks.ReadWrite** - Read and write your tasks
+   - **offline_access** - Maintain access to data you have given it access to
+6. Click **Add permissions**
+
+**No admin consent required** for delegated permissions. Users consent when they first log in.
 
 ## Step 5: Create .env File
 
@@ -85,10 +119,13 @@ cd orgplan-todo
 cp .env.example .env
 ```
 
-Edit `.env` and add your credentials:
+Edit `.env` and add your credentials based on your chosen authentication mode:
+
+### For Application Mode:
 
 ```env
 # Microsoft Graph API Authentication
+AUTH_MODE=application
 MS_CLIENT_ID=your-application-client-id-here
 MS_TENANT_ID=your-directory-tenant-id-here
 MS_CLIENT_SECRET=your-client-secret-value-here
@@ -104,7 +141,32 @@ TODO_LIST_NAME=Orgplan 2025
 # LOG_FILE=sync.log
 ```
 
+### For Delegated Mode:
+
+```env
+# Microsoft Graph API Authentication
+AUTH_MODE=delegated
+MS_CLIENT_ID=your-application-client-id-here
+MS_TENANT_ID=your-directory-tenant-id-here
+# No client secret needed for delegated mode
+
+# Orgplan Configuration
+ORGPLAN_DIR=.
+TODO_LIST_NAME=Orgplan 2025
+
+# Optional: Token storage path (default: .tokens/)
+# TOKEN_STORAGE_PATH=.tokens/
+
+# Optional: Override current month (format: YYYY-MM)
+# SYNC_MONTH=2025-12
+
+# Optional: Log file path
+# LOG_FILE=sync.log
+```
+
 ## Step 6: Test Authentication
+
+### For Application Mode:
 
 Test that your credentials work:
 
@@ -114,10 +176,20 @@ python tools/sync.py --todo-list "Orgplan 2025" --dry-run
 
 If authentication succeeds, you should see:
 ```
-[YYYY-MM-DD HH:MM:SS] INFO: Authenticating with Microsoft Graph API...
+[YYYY-MM-DD HH:MM:SS] INFO: Authenticating with Microsoft Graph API (application mode)...
 [YYYY-MM-DD HH:MM:SS] INFO: Authentication successful
 ```
 
+### For Delegated Mode:
+
+**First-time setup** requires interactive login:
+
+```bash
+python tools/sync.py --todo-list "Orgplan 2025" --auth-mode delegated --dry-run
+```
+
+You'll see:
+```
 ## Troubleshooting
 
 ### "Authentication failed" Error
@@ -209,16 +281,21 @@ Set a calendar reminder before your secret expires:
 - Access to email or calendar
 - Access to files or documents
 
-## Alternative: Delegated Permissions (Future)
+## Choosing Between Application and Delegated Mode
 
-Currently, this project uses **Application permissions** with client credentials flow.
+### Use Application Mode When:
+- Running on a server or automated system
+- You have admin access to grant consent
+- You want zero user interaction after initial setup
+- You're comfortable managing client secrets
 
-For **user-specific** access, you could use:
-- **Delegated permissions**: Tasks.ReadWrite
-- **Authentication flow**: OAuth 2.0 with user consent
-- **Benefit**: User-specific access without admin consent
+### Use Delegated Mode When:
+- Personal use or single-user scenarios
+- You don't have admin privileges
+- You prefer not to manage client secrets
+- One-time interactive login is acceptable
 
-This would require interactive login but wouldn't need admin consent. Consider this for multi-user scenarios.
+Both modes provide the same functionality for syncing tasks. Delegated mode is generally easier for personal use, while application mode is better for production automation.
 
 ## Additional Resources
 

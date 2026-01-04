@@ -208,3 +208,5 @@ __marimo__/
 
 # Orgplan-todo sync
 sync.lock
+.tokens/
+tokens.json
