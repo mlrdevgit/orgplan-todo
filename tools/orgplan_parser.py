@@ -29,6 +29,8 @@ class OrgplanParser:
     PRIORITY_PATTERN = re.compile(r"#p(\d+)")
     TIME_ESTIMATE_PATTERN = re.compile(r"#\d+[hd]")
     BLOCKED_PATTERN = re.compile(r"#blocked")
+    # Custom tags pattern - matches any remaining hashtags (e.g., #uma, #tag, #custom)
+    CUSTOM_TAG_PATTERN = re.compile(r"#\w+")
     # Backend ID patterns
     MS_TODO_ID_PATTERN = re.compile(r"<!--\s*ms-todo-id:\s*([^\s]+)\s*-->")
     GOOGLE_TASKS_ID_PATTERN = re.compile(r"<!--\s*google-tasks-id:\s*([^\s]+)\s*-->")
@@ -147,6 +149,8 @@ class OrgplanParser:
         description = self.PRIORITY_PATTERN.sub("", description)
         description = self.TIME_ESTIMATE_PATTERN.sub("", description)
         description = self.BLOCKED_PATTERN.sub("", description)
+        # Remove any remaining custom tags (e.g., #uma, #tag, #custom)
+        description = self.CUSTOM_TAG_PATTERN.sub("", description)
         description = description.strip()
 
         if not description:
