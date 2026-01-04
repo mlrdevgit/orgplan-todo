@@ -115,13 +115,10 @@ class Config:
                 errors.append("Google Client Secret is required (set GOOGLE_CLIENT_SECRET)")
 
         # Common validation
-        if not self.task_list_name:
-            if self.backend == "google":
-                errors.append(
-                    "Task list name is required for Google (set GOOGLE_TASK_LIST_NAME or leave empty to use primary list)"
-                )
-            else:
-                errors.append("Task list name is required for Microsoft (set TODO_LIST_NAME)")
+        # For Google Tasks, empty task_list_name is valid (uses primary list)
+        # For Microsoft, task_list_name is required
+        if not self.task_list_name and self.backend != "google":
+            errors.append("Task list name is required for Microsoft (set TODO_LIST_NAME)")
 
         if not self.orgplan_dir.exists():
             errors.append(f"Orgplan directory does not exist: {self.orgplan_dir}")
