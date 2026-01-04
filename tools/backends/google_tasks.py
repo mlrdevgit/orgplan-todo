@@ -197,7 +197,6 @@ class GoogleTasksBackend(TaskBackend):
     def get_task_lists(self) -> list[dict]:
         """Get all task lists."""
 
-        @retry_on_failure
         def _get_lists():
             try:
                 results = self.service.tasklists().list().execute()
@@ -205,7 +204,7 @@ class GoogleTasksBackend(TaskBackend):
             except HttpError as e:
                 raise self._handle_api_error(e)
 
-        return _get_lists(max_retries=3, logger=self.logger)
+        return retry_on_failure(_get_lists, max_retries=3, logger=self.logger)
 
     def get_list_by_name(self, name: str) -> Optional[dict]:
         """Get a task list by name (title).
@@ -232,7 +231,6 @@ class GoogleTasksBackend(TaskBackend):
             List of TaskItem objects
         """
 
-        @retry_on_failure
         def _get_tasks():
             try:
                 results = (
@@ -245,7 +243,7 @@ class GoogleTasksBackend(TaskBackend):
             except HttpError as e:
                 raise self._handle_api_error(e)
 
-        return _get_tasks(max_retries=3, logger=self.logger)
+        return retry_on_failure(_get_tasks, max_retries=3, logger=self.logger)
 
     def create_task(self, list_id: str, task: TaskItem) -> TaskItem:
         """Create a new task.
@@ -258,13 +256,12 @@ class GoogleTasksBackend(TaskBackend):
             Created TaskItem with backend-assigned ID
         """
 
-        @retry_on_failure
         def _create_task():
             try:
                 # Build Google Tasks task object
                 task_body = {
                     "title": task.title,
-                    "status": "completed" if task.is_completed else "needsAction",
+                    "status": "completed" if task.status == "completed" else "needsAction",
                 }
 
                 if task.body:
@@ -276,7 +273,7 @@ class GoogleTasksBackend(TaskBackend):
             except HttpError as e:
                 raise self._handle_api_error(e)
 
-        return _create_task(max_retries=3, logger=self.logger)
+        return retry_on_failure(_create_task, max_retries=3, logger=self.logger)
 
     def update_task(self, list_id: str, task: TaskItem) -> TaskItem:
         """Update an existing task.
@@ -289,14 +286,13 @@ class GoogleTasksBackend(TaskBackend):
             Updated TaskItem
         """
 
-        @retry_on_failure
         def _update_task():
             try:
                 # Build Google Tasks task object
                 task_body = {
                     "id": task.id,
                     "title": task.title,
-                    "status": "completed" if task.is_completed else "needsAction",
+                    "status": "completed" if task.status == "completed" else "needsAction",
                 }
 
                 if task.body is not None:
@@ -312,7 +308,7 @@ class GoogleTasksBackend(TaskBackend):
             except HttpError as e:
                 raise self._handle_api_error(e)
 
-        return _update_task(max_retries=3, logger=self.logger)
+        return retry_on_failure(_update_task, max_retries=3, logger=self.logger)
 
     def delete_task(self, list_id: str, task_id: str) -> None:
         """Delete a task.
@@ -322,14 +318,13 @@ class GoogleTasksBackend(TaskBackend):
             task_id: The ID of the task to delete
         """
 
-        @retry_on_failure
         def _delete_task():
             try:
                 self.service.tasks().delete(tasklist=list_id, task=task_id).execute()
             except HttpError as e:
                 raise self._handle_api_error(e)
 
-        _delete_task(max_retries=3, logger=self.logger)
+        retry_on_failure(_delete_task, max_retries=3, logger=self.logger)
 
     def _api_to_task_item(self, api_task: dict) -> TaskItem:
         """Convert Google Tasks API task to TaskItem.
