@@ -1,9 +1,14 @@
 # Core dependencies
-msal>=1.24.0                    # Microsoft Authentication Library
-requests>=2.31.0                # HTTP client for Graph API
-python-dotenv>=1.0.0            # Environment variable management
+msal>=1.24.0                        # Microsoft Authentication Library
+requests>=2.31.0                    # HTTP client for Graph API
+python-dotenv>=1.0.0                # Environment variable management
+
+# Google Tasks dependencies
+google-auth-oauthlib>=1.0.0         # OAuth 2.0 flow for Google APIs
+google-auth-httplib2>=0.1.0         # HTTP library for Google APIs
+google-api-python-client>=2.0.0     # Google Tasks API client
 
 # Development dependencies
-pytest>=7.4.0                   # Testing framework
-black>=23.0.0                   # Code formatting
-pylint>=2.17.0                  # Code linting
+pytest>=7.4.0                       # Testing framework
+black>=23.0.0                       # Code formatting
+pylint>=2.17.0                      # Code linting
