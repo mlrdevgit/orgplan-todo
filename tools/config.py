@@ -116,9 +116,12 @@ class Config:
 
         # Common validation
         if not self.task_list_name:
-            errors.append(
-                "Task list name is required (set TODO_LIST_NAME or GOOGLE_TASK_LIST_NAME)"
-            )
+            if self.backend == "google":
+                errors.append(
+                    "Task list name is required for Google (set GOOGLE_TASK_LIST_NAME or leave empty to use primary list)"
+                )
+            else:
+                errors.append("Task list name is required for Microsoft (set TODO_LIST_NAME)")
 
         if not self.orgplan_dir.exists():
             errors.append(f"Orgplan directory does not exist: {self.orgplan_dir}")
@@ -148,6 +151,14 @@ def load_config_from_env() -> dict:
 
     backend = os.getenv("TASK_BACKEND", "microsoft")
 
+    # Choose task list name based on backend
+    if backend == "google":
+        # For Google, prefer GOOGLE_TASK_LIST_NAME, fallback to TODO_LIST_NAME
+        task_list_name = os.getenv("GOOGLE_TASK_LIST_NAME") or os.getenv("TODO_LIST_NAME")
+    else:
+        # For Microsoft, prefer TODO_LIST_NAME, fallback to GOOGLE_TASK_LIST_NAME
+        task_list_name = os.getenv("TODO_LIST_NAME") or os.getenv("GOOGLE_TASK_LIST_NAME")
+
     return {
         "backend": backend,
         # Microsoft-specific
@@ -159,7 +170,7 @@ def load_config_from_env() -> dict:
         "google_client_id": os.getenv("GOOGLE_CLIENT_ID"),
         "google_client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
         # Common
-        "task_list_name": os.getenv("TODO_LIST_NAME") or os.getenv("GOOGLE_TASK_LIST_NAME"),
+        "task_list_name": task_list_name,
         "token_storage_path": os.getenv("TOKEN_STORAGE_PATH"),
         "orgplan_dir": os.getenv("ORGPLAN_DIR", "."),
         "month": os.getenv("SYNC_MONTH"),
