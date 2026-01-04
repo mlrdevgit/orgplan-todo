@@ -100,19 +100,22 @@ class SyncEngine:
         todo_by_id: dict[str, TaskItem],
         todo_by_title: dict[str, TaskItem],
     ) -> Optional[TaskItem]:
-        """Find matching To Do task for an orgplan task.
+        """Find matching backend task for an orgplan task.
 
         Args:
             orgplan_task: Orgplan task to match
-            todo_by_id: Dictionary of To Do tasks by ID
-            todo_by_title: Dictionary of To Do tasks by title
+            todo_by_id: Dictionary of backend tasks by ID
+            todo_by_title: Dictionary of backend tasks by title
 
         Returns:
             Matching TaskItem or None
         """
-        # Try matching by ms-todo-id first
-        if orgplan_task.ms_todo_id and orgplan_task.ms_todo_id in todo_by_id:
-            return todo_by_id[orgplan_task.ms_todo_id]
+        # Try matching by backend-specific ID first
+        backend_id_attr = self.backend.id_marker_prefix.replace('-', '_')
+        backend_id = getattr(orgplan_task, backend_id_attr, None)
+
+        if backend_id and backend_id in todo_by_id:
+            return todo_by_id[backend_id]
 
         # Fallback to title matching
         if orgplan_task.description in todo_by_title:
@@ -282,9 +285,12 @@ class SyncEngine:
         # Build lookup maps for orgplan tasks
         orgplan_by_id = {}
         orgplan_by_title = {}
+        backend_id_attr = self.backend.id_marker_prefix.replace('-', '_')
+
         for task in orgplan_tasks:
-            if task.ms_todo_id:
-                orgplan_by_id[task.ms_todo_id] = task
+            backend_id = getattr(task, backend_id_attr, None)
+            if backend_id:
+                orgplan_by_id[backend_id] = task
             orgplan_by_title[task.description] = task
 
         # Process each To Do task
@@ -371,8 +377,10 @@ class SyncEngine:
                 priority=priority,
             )
 
-            # Add detail section with ms-todo-id and body if present
-            self.orgplan_parser.add_detail_section(orgplan_task, ms_todo_id=todo_task.id)
+            # Add detail section with backend-specific ID
+            backend_id_attr = self.backend.id_marker_prefix.replace('-', '_')
+            id_kwargs = {backend_id_attr: todo_task.id}
+            self.orgplan_parser.add_detail_section(orgplan_task, **id_kwargs)
 
             # Add body to detail section if present and not empty
             if todo_task.body and todo_task.body.strip():
@@ -425,13 +433,16 @@ class SyncEngine:
                 modified = True
 
         # Sync detail section body (only if orgplan detail section is empty)
+        backend_id_attr = self.backend.id_marker_prefix.replace('-', '_')
+
         if todo_task.body and todo_task.body.strip() and not orgplan_task.detail_section.strip():
-            changes.append("adding To Do notes to empty detail section")
+            changes.append("adding backend notes to empty detail section")
             if not self.dry_run:
                 # The detail section sync would happen here
-                # For now, we just ensure the ms-todo-id is present
-                if not orgplan_task.ms_todo_id:
-                    self.orgplan_parser.add_detail_section(orgplan_task, ms_todo_id=todo_task.id)
+                # For now, we just ensure the backend ID is present
+                if not getattr(orgplan_task, backend_id_attr, None):
+                    id_kwargs = {backend_id_attr: todo_task.id}
+                    self.orgplan_parser.add_detail_section(orgplan_task, **id_kwargs)
                 modified = True
 
         if not changes:
@@ -446,9 +457,10 @@ class SyncEngine:
             self.logger.info("  [DRY RUN] Would update orgplan task")
             return True
 
-        # Ensure ms-todo-id is present
-        if not orgplan_task.ms_todo_id:
-            self.orgplan_parser.add_detail_section(orgplan_task, ms_todo_id=todo_task.id)
+        # Ensure backend ID is present
+        if not getattr(orgplan_task, backend_id_attr, None):
+            id_kwargs = {backend_id_attr: todo_task.id}
+            self.orgplan_parser.add_detail_section(orgplan_task, **id_kwargs)
 
         self.logger.info("  Updated successfully")
         return modified
