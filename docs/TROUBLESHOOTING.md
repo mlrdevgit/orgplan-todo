@@ -152,6 +152,39 @@ rm -rf .tokens/
 python tools/sync.py --todo-list "Orgplan 2025" --auth-mode delegated
 ```
 
+#### "Unmanaged tenant" error (AADSTS650051)
+
+**Symptoms:**
+```
+AADSTS650051: Using application 'Orgplan To Do Sync' is currently not supported
+for your organization [domain] because it is in an unmanaged state. An administrator
+needs to claim ownership of the company by DNS validation.
+```
+
+**Cause:** Your Azure AD tenant is in an "unmanaged" state (viral tenant), created through self-service signup without formal IT administration.
+
+**Solutions:**
+
+**Option 1: Use Personal Microsoft Account (Easiest)**
+- Create new Azure AD app registration with personal account (@outlook.com, @hotmail.com, @live.com)
+- Personal accounts don't have this tenant restriction
+- Follow the delegated auth setup guide with your personal account
+
+**Option 2: Admin Takeover**
+- If you control the domain's DNS, perform an admin takeover:
+- Follow: https://docs.microsoft.com/en-us/azure/active-directory/enterprise-users/domains-admin-takeover
+- Add DNS TXT record to verify domain ownership
+- Complete takeover, then retry authentication
+
+**Option 3: Switch to Application Mode**
+- Use application mode if you have access to a managed tenant with admin rights
+- Update `.env`: `AUTH_MODE=application`
+- Requires admin consent but bypasses user-level authentication
+
+**Option 4: Different Tenant**
+- Create app registration in a different, managed tenant
+- Use a different Microsoft account with proper organizational access
+
 ### Application Authentication Issues
 
 ### "Authentication failed: AADSTS700016"
