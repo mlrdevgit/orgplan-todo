@@ -135,3 +135,16 @@ class TaskBackend(ABC):
             ID marker prefix (e.g., 'ms-todo-id', 'google-tasks-id')
         """
         pass
+
+    @property
+    @abstractmethod
+    def supports_priority(self) -> bool:
+        """Return whether this backend supports task priority/importance.
+
+        Backends that don't support priority (like Google Tasks) should return False.
+        This prevents unnecessary sync updates when priority is the only difference.
+
+        Returns:
+            True if backend supports priority, False otherwise
+        """
+        pass

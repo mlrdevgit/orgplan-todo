@@ -66,6 +66,11 @@ class GoogleTasksBackend(TaskBackend):
         """Return ID marker prefix for orgplan files."""
         return "google-tasks-id"
 
+    @property
+    def supports_priority(self) -> bool:
+        """Google Tasks does not support task priority/importance."""
+        return False
+
     def authenticate(self):
         """Authenticate with Google Tasks API using OAuth 2.0."""
         self.credentials = self._load_credentials()
