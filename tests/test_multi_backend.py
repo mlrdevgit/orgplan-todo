@@ -104,9 +104,7 @@ Task details here.
         # Create temp file
         import tempfile
 
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".md", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
             f.write(markdown_content)
             temp_path = Path(f.name)
 
@@ -131,9 +129,7 @@ Task details here.
 
         import tempfile
 
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".md", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
             f.write(markdown_content)
             temp_path = Path(f.name)
 
@@ -144,9 +140,7 @@ Task details here.
             task = tasks[0]
 
             # Add both markers
-            parser.add_detail_section(
-                task, ms_todo_id="ms-id-123", google_tasks_id="google-id-456"
-            )
+            parser.add_detail_section(task, ms_todo_id="ms-id-123", google_tasks_id="google-id-456")
             parser.save()
 
             # Re-parse
@@ -310,12 +304,8 @@ class TestTaskItemConversion(unittest.TestCase):
     def test_task_item_status_mapping(self):
         """Test that status uses generic values."""
         # Both backends should use "active" and "completed"
-        active_task = TaskItem(
-            id="1", title="Active", status="active", importance=None
-        )
-        completed_task = TaskItem(
-            id="2", title="Completed", status="completed", importance=None
-        )
+        active_task = TaskItem(id="1", title="Active", status="active", importance=None)
+        completed_task = TaskItem(id="2", title="Completed", status="completed", importance=None)
 
         self.assertEqual(active_task.status, "active")
         self.assertEqual(completed_task.status, "completed")
@@ -391,9 +381,7 @@ class TestPriorityHandling(unittest.TestCase):
     def test_microsoft_supports_priority(self):
         """Test Microsoft backend supports priority."""
         # Microsoft backend should map priorities
-        task = TaskItem(
-            id="1", title="Task", status="active", importance="high", body=None
-        )
+        task = TaskItem(id="1", title="Task", status="active", importance="high", body=None)
 
         # This would be mapped to #p1 in orgplan
         self.assertEqual(task.importance, "high")
@@ -401,9 +389,7 @@ class TestPriorityHandling(unittest.TestCase):
     def test_google_ignores_priority(self):
         """Test Google backend ignores priority."""
         # Google backend should set importance to None
-        task = TaskItem(
-            id="1", title="Task", status="active", importance=None, body=None
-        )
+        task = TaskItem(id="1", title="Task", status="active", importance=None, body=None)
 
         # Google Tasks doesn't support priority
         self.assertIsNone(task.importance)

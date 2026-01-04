@@ -23,7 +23,7 @@ class GoogleTasksBackend(TaskBackend):
     """
 
     # OAuth 2.0 scopes
-    SCOPES = ['https://www.googleapis.com/auth/tasks']
+    SCOPES = ["https://www.googleapis.com/auth/tasks"]
 
     def __init__(
         self,
@@ -31,7 +31,7 @@ class GoogleTasksBackend(TaskBackend):
         client_secret: str,
         token_storage_path: Optional[Path] = None,
         allow_prompt: bool = True,
-        logger: Optional[logging.Logger] = None
+        logger: Optional[logging.Logger] = None,
     ):
         """Initialize Google Tasks backend.
 
@@ -94,7 +94,7 @@ class GoogleTasksBackend(TaskBackend):
                 self._interactive_login()
 
         # Build the service
-        self.service = build('tasks', 'v1', credentials=self.credentials)
+        self.service = build("tasks", "v1", credentials=self.credentials)
         self.logger.info("Authenticated with Google Tasks API")
 
     def _load_credentials(self) -> Optional[Credentials]:
@@ -107,16 +107,16 @@ class GoogleTasksBackend(TaskBackend):
             return None
 
         try:
-            with open(self.token_path, 'r') as f:
+            with open(self.token_path, "r") as f:
                 token_data = json.load(f)
 
             return Credentials(
-                token=token_data.get('token'),
-                refresh_token=token_data.get('refresh_token'),
-                token_uri='https://oauth2.googleapis.com/token',
+                token=token_data.get("token"),
+                refresh_token=token_data.get("refresh_token"),
+                token_uri="https://oauth2.googleapis.com/token",
                 client_id=self.client_id,
                 client_secret=self.client_secret,
-                scopes=self.SCOPES
+                scopes=self.SCOPES,
             )
         except Exception as e:
             self.logger.warning(f"Failed to load credentials: {e}")
@@ -128,15 +128,15 @@ class GoogleTasksBackend(TaskBackend):
         self.token_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
 
         token_data = {
-            'token': self.credentials.token,
-            'refresh_token': self.credentials.refresh_token,
-            'token_uri': self.credentials.token_uri,
-            'client_id': self.credentials.client_id,
-            'client_secret': self.credentials.client_secret,
-            'scopes': self.credentials.scopes
+            "token": self.credentials.token,
+            "refresh_token": self.credentials.refresh_token,
+            "token_uri": self.credentials.token_uri,
+            "client_id": self.credentials.client_id,
+            "client_secret": self.credentials.client_secret,
+            "scopes": self.credentials.scopes,
         }
 
-        with open(self.token_path, 'w') as f:
+        with open(self.token_path, "w") as f:
             json.dump(token_data, f, indent=2)
 
         # Set secure permissions
@@ -152,14 +152,11 @@ class GoogleTasksBackend(TaskBackend):
                 "client_secret": self.client_secret,
                 "redirect_uris": ["http://localhost", "urn:ietf:wg:oauth:2.0:oob"],
                 "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token"
+                "token_uri": "https://oauth2.googleapis.com/token",
             }
         }
 
-        flow = InstalledAppFlow.from_client_config(
-            client_config,
-            scopes=self.SCOPES
-        )
+        flow = InstalledAppFlow.from_client_config(client_config, scopes=self.SCOPES)
 
         # Display authentication instructions
         print("\n" + "=" * 70)
@@ -199,11 +196,12 @@ class GoogleTasksBackend(TaskBackend):
 
     def get_task_lists(self) -> list[dict]:
         """Get all task lists."""
+
         @retry_on_failure
         def _get_lists():
             try:
                 results = self.service.tasklists().list().execute()
-                return results.get('items', [])
+                return results.get("items", [])
             except HttpError as e:
                 raise self._handle_api_error(e)
 
@@ -233,15 +231,16 @@ class GoogleTasksBackend(TaskBackend):
         Returns:
             List of TaskItem objects
         """
+
         @retry_on_failure
         def _get_tasks():
             try:
-                results = self.service.tasks().list(
-                    tasklist=list_id,
-                    showCompleted=True,
-                    showHidden=True
-                ).execute()
-                tasks = results.get('items', [])
+                results = (
+                    self.service.tasks()
+                    .list(tasklist=list_id, showCompleted=True, showHidden=True)
+                    .execute()
+                )
+                tasks = results.get("items", [])
                 return [self._api_to_task_item(task) for task in tasks]
             except HttpError as e:
                 raise self._handle_api_error(e)
@@ -258,22 +257,20 @@ class GoogleTasksBackend(TaskBackend):
         Returns:
             Created TaskItem with backend-assigned ID
         """
+
         @retry_on_failure
         def _create_task():
             try:
                 # Build Google Tasks task object
                 task_body = {
-                    'title': task.title,
-                    'status': 'completed' if task.is_completed else 'needsAction',
+                    "title": task.title,
+                    "status": "completed" if task.is_completed else "needsAction",
                 }
 
                 if task.body:
-                    task_body['notes'] = task.body
+                    task_body["notes"] = task.body
 
-                result = self.service.tasks().insert(
-                    tasklist=list_id,
-                    body=task_body
-                ).execute()
+                result = self.service.tasks().insert(tasklist=list_id, body=task_body).execute()
 
                 return self._api_to_task_item(result)
             except HttpError as e:
@@ -291,24 +288,25 @@ class GoogleTasksBackend(TaskBackend):
         Returns:
             Updated TaskItem
         """
+
         @retry_on_failure
         def _update_task():
             try:
                 # Build Google Tasks task object
                 task_body = {
-                    'id': task.id,
-                    'title': task.title,
-                    'status': 'completed' if task.is_completed else 'needsAction',
+                    "id": task.id,
+                    "title": task.title,
+                    "status": "completed" if task.is_completed else "needsAction",
                 }
 
                 if task.body is not None:
-                    task_body['notes'] = task.body
+                    task_body["notes"] = task.body
 
-                result = self.service.tasks().update(
-                    tasklist=list_id,
-                    task=task.id,
-                    body=task_body
-                ).execute()
+                result = (
+                    self.service.tasks()
+                    .update(tasklist=list_id, task=task.id, body=task_body)
+                    .execute()
+                )
 
                 return self._api_to_task_item(result)
             except HttpError as e:
@@ -323,13 +321,11 @@ class GoogleTasksBackend(TaskBackend):
             list_id: The ID of the task list
             task_id: The ID of the task to delete
         """
+
         @retry_on_failure
         def _delete_task():
             try:
-                self.service.tasks().delete(
-                    tasklist=list_id,
-                    task=task_id
-                ).execute()
+                self.service.tasks().delete(tasklist=list_id, task=task_id).execute()
             except HttpError as e:
                 raise self._handle_api_error(e)
 
@@ -345,15 +341,15 @@ class GoogleTasksBackend(TaskBackend):
             TaskItem object
         """
         # Map Google status to generic status
-        google_status = api_task.get('status', 'needsAction')
-        status = "completed" if google_status == 'completed' else "active"
+        google_status = api_task.get("status", "needsAction")
+        status = "completed" if google_status == "completed" else "active"
 
         # Google Tasks doesn't have importance/priority
         return TaskItem(
-            id=api_task['id'],
-            title=api_task.get('title', ''),
+            id=api_task["id"],
+            title=api_task.get("title", ""),
             status=status,
             importance=None,  # Google Tasks doesn't support priority
-            body=api_task.get('notes'),
-            completed_datetime=api_task.get('completed'),
+            body=api_task.get("notes"),
+            completed_datetime=api_task.get("completed"),
         )

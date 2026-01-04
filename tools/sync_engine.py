@@ -68,9 +68,7 @@ class SyncEngine:
                     continue
 
                 # Find matching To Do task
-                todo_task = self._find_matching_todo_task(
-                    orgplan_task, todo_by_id, todo_by_title
-                )
+                todo_task = self._find_matching_todo_task(orgplan_task, todo_by_id, todo_by_title)
 
                 if todo_task:
                     # Update existing task
@@ -111,7 +109,7 @@ class SyncEngine:
             Matching TaskItem or None
         """
         # Try matching by backend-specific ID first
-        backend_id_attr = self.backend.id_marker_prefix.replace('-', '_')
+        backend_id_attr = self.backend.id_marker_prefix.replace("-", "_")
         backend_id = getattr(orgplan_task, backend_id_attr, None)
 
         if backend_id and backend_id in todo_by_id:
@@ -164,9 +162,7 @@ class SyncEngine:
             self.logger.error(f"  Failed to create task: {e}")
             return False
 
-    def _update_todo_task(
-        self, orgplan_task: OrgplanTask, todo_task: TaskItem
-    ) -> bool:
+    def _update_todo_task(self, orgplan_task: OrgplanTask, todo_task: TaskItem) -> bool:
         """Update existing To Do task from orgplan task.
 
         Args:
@@ -221,7 +217,7 @@ class SyncEngine:
             self.backend.update_task(self.task_list_id, updated_task)
 
             # Ensure backend ID is in orgplan
-            backend_id_attr = self.backend.id_marker_prefix.replace('-', '_')
+            backend_id_attr = self.backend.id_marker_prefix.replace("-", "_")
             if not getattr(orgplan_task, backend_id_attr, None):
                 id_marker = {backend_id_attr: todo_task.id}
                 self.orgplan_parser.add_detail_section(orgplan_task, **id_marker)
@@ -265,7 +261,9 @@ class SyncEngine:
         else:
             return "active"
 
-    def sync_todo_to_orgplan(self, orgplan_tasks: list[OrgplanTask], todo_tasks: list[TaskItem]) -> dict:
+    def sync_todo_to_orgplan(
+        self, orgplan_tasks: list[OrgplanTask], todo_tasks: list[TaskItem]
+    ) -> dict:
         """Sync tasks from Microsoft To Do to orgplan (Phase 2).
 
         Args:
@@ -285,7 +283,7 @@ class SyncEngine:
         # Build lookup maps for orgplan tasks
         orgplan_by_id = {}
         orgplan_by_title = {}
-        backend_id_attr = self.backend.id_marker_prefix.replace('-', '_')
+        backend_id_attr = self.backend.id_marker_prefix.replace("-", "_")
 
         for task in orgplan_tasks:
             backend_id = getattr(task, backend_id_attr, None)
@@ -299,7 +297,9 @@ class SyncEngine:
                 # Skip completed tasks that don't exist in orgplan
                 # (they were likely completed in a previous month)
                 if todo_task.is_completed and todo_task.id not in orgplan_by_id:
-                    self.logger.debug(f"Skipping completed To Do task not in orgplan: {todo_task.title}")
+                    self.logger.debug(
+                        f"Skipping completed To Do task not in orgplan: {todo_task.title}"
+                    )
                     stats["skipped"] += 1
                     continue
 
@@ -366,7 +366,9 @@ class SyncEngine:
         self.logger.info(f"Creating orgplan task: {todo_task.title}")
 
         if self.dry_run:
-            self.logger.info(f"  [DRY RUN] Would create task with status={status}, priority={priority}")
+            self.logger.info(
+                f"  [DRY RUN] Would create task with status={status}, priority={priority}"
+            )
             return True
 
         try:
@@ -378,7 +380,7 @@ class SyncEngine:
             )
 
             # Add detail section with backend-specific ID
-            backend_id_attr = self.backend.id_marker_prefix.replace('-', '_')
+            backend_id_attr = self.backend.id_marker_prefix.replace("-", "_")
             id_kwargs = {backend_id_attr: todo_task.id}
             self.orgplan_parser.add_detail_section(orgplan_task, **id_kwargs)
 
@@ -433,7 +435,7 @@ class SyncEngine:
                 modified = True
 
         # Sync detail section body (only if orgplan detail section is empty)
-        backend_id_attr = self.backend.id_marker_prefix.replace('-', '_')
+        backend_id_attr = self.backend.id_marker_prefix.replace("-", "_")
 
         if todo_task.body and todo_task.body.strip() and not orgplan_task.detail_section.strip():
             changes.append("adding backend notes to empty detail section")

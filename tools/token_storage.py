@@ -10,7 +10,9 @@ import logging
 class TokenStorage:
     """Manages storage and retrieval of OAuth tokens."""
 
-    def __init__(self, storage_path: Optional[Path] = None, logger: Optional[logging.Logger] = None):
+    def __init__(
+        self, storage_path: Optional[Path] = None, logger: Optional[logging.Logger] = None
+    ):
         """Initialize token storage.
 
         Args:
@@ -41,8 +43,12 @@ class TokenStorage:
         except OSError as e:
             self.logger.warning(f"Could not set secure permissions on {self.storage_path}: {e}")
 
-    def save_tokens(self, access_token: str, refresh_token: Optional[str] = None,
-                    expires_in: Optional[int] = None):
+    def save_tokens(
+        self,
+        access_token: str,
+        refresh_token: Optional[str] = None,
+        expires_in: Optional[int] = None,
+    ):
         """Save tokens to storage.
 
         Args:
@@ -60,7 +66,7 @@ class TokenStorage:
 
         try:
             # Write with secure permissions
-            with open(self.token_file, 'w') as f:
+            with open(self.token_file, "w") as f:
                 json.dump(token_data, f, indent=2)
 
             # Ensure file has secure permissions (owner read/write only)
@@ -82,7 +88,7 @@ class TokenStorage:
             return None
 
         try:
-            with open(self.token_file, 'r') as f:
+            with open(self.token_file, "r") as f:
                 token_data = json.load(f)
 
             self.logger.debug("Loaded tokens from storage")

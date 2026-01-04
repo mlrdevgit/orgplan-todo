@@ -40,9 +40,7 @@ class SyncLock:
                 lock_age = time.time() - self.lock_file.stat().st_mtime
 
                 if lock_age > stale_threshold:
-                    self.logger.warning(
-                        f"Lock file is stale ({lock_age:.0f}s old), removing"
-                    )
+                    self.logger.warning(f"Lock file is stale ({lock_age:.0f}s old), removing")
                     try:
                         self.lock_file.unlink()
                     except OSError as e:
@@ -52,17 +50,14 @@ class SyncLock:
                     # Lock is held by another process
                     if timeout == 0:
                         self.logger.error(
-                            "Another sync is already running. "
-                            f"Lock file: {self.lock_file}"
+                            "Another sync is already running. " f"Lock file: {self.lock_file}"
                         )
                         return False
 
                     # Wait and retry
                     elapsed = time.time() - start_time
                     if elapsed >= timeout:
-                        self.logger.error(
-                            f"Timeout waiting for lock after {elapsed:.1f}s"
-                        )
+                        self.logger.error(f"Timeout waiting for lock after {elapsed:.1f}s")
                         return False
 
                     time.sleep(1)
@@ -73,8 +68,7 @@ class SyncLock:
                 # Write PID and timestamp to lock file
                 self.lock_file.parent.mkdir(parents=True, exist_ok=True)
                 self.lock_file.write_text(
-                    f"PID: {os.getpid()}\n"
-                    f"Started: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"PID: {os.getpid()}\n" f"Started: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
                 )
                 self.acquired = True
                 self.logger.debug(f"Acquired lock: {self.lock_file}")

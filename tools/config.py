@@ -98,11 +98,15 @@ class Config:
 
             # Validate auth mode
             if self.auth_mode not in ["application", "delegated"]:
-                errors.append(f"Invalid auth mode: {self.auth_mode} (must be 'application' or 'delegated')")
+                errors.append(
+                    f"Invalid auth mode: {self.auth_mode} (must be 'application' or 'delegated')"
+                )
 
             # Client secret only required for application mode
             if self.auth_mode == "application" and not self.client_secret:
-                errors.append("Microsoft Client Secret is required for application mode (set MS_CLIENT_SECRET)")
+                errors.append(
+                    "Microsoft Client Secret is required for application mode (set MS_CLIENT_SECRET)"
+                )
 
         elif self.backend == "google":
             if not self.google_client_id:
@@ -112,7 +116,9 @@ class Config:
 
         # Common validation
         if not self.task_list_name:
-            errors.append("Task list name is required (set TODO_LIST_NAME or GOOGLE_TASK_LIST_NAME)")
+            errors.append(
+                "Task list name is required (set TODO_LIST_NAME or GOOGLE_TASK_LIST_NAME)"
+            )
 
         if not self.orgplan_dir.exists():
             errors.append(f"Orgplan directory does not exist: {self.orgplan_dir}")
@@ -120,9 +126,7 @@ class Config:
             errors.append(f"Orgplan directory is not a directory: {self.orgplan_dir}")
 
         if not self.orgplan_file.exists():
-            errors.append(
-                f"Orgplan file for {self.month} does not exist: {self.orgplan_file}"
-            )
+            errors.append(f"Orgplan file for {self.month} does not exist: {self.orgplan_file}")
 
         # Validate month format
         try:
@@ -179,30 +183,35 @@ def create_config_from_args(args) -> Config:
     env_config = load_config_from_env()
 
     # Determine allow_prompt (inverted from no_prompt flag)
-    allow_prompt = not getattr(args, 'no_prompt', False)
+    allow_prompt = not getattr(args, "no_prompt", False)
 
     # Get task list name (support both --todo-list and --task-list)
-    task_list = getattr(args, 'task_list', None) or getattr(args, 'todo_list', None) or env_config.get("task_list_name")
+    task_list = (
+        getattr(args, "task_list", None)
+        or getattr(args, "todo_list", None)
+        or env_config.get("task_list_name")
+    )
 
     # CLI args override environment variables
     config = Config(
-        backend=getattr(args, 'backend', None) or env_config.get("backend", "microsoft"),
+        backend=getattr(args, "backend", None) or env_config.get("backend", "microsoft"),
         # Microsoft-specific
-        client_id=getattr(args, 'client_id', None) or env_config.get("client_id"),
-        tenant_id=getattr(args, 'tenant_id', None) or env_config.get("tenant_id"),
-        auth_mode=getattr(args, 'auth_mode', None) or env_config.get("auth_mode", "application"),
-        client_secret=getattr(args, 'client_secret', None) or env_config.get("client_secret"),
+        client_id=getattr(args, "client_id", None) or env_config.get("client_id"),
+        tenant_id=getattr(args, "tenant_id", None) or env_config.get("tenant_id"),
+        auth_mode=getattr(args, "auth_mode", None) or env_config.get("auth_mode", "application"),
+        client_secret=getattr(args, "client_secret", None) or env_config.get("client_secret"),
         # Google-specific
         google_client_id=env_config.get("google_client_id"),
         google_client_secret=env_config.get("google_client_secret"),
         # Common
         task_list_name=task_list,
-        token_storage_path=getattr(args, 'token_storage_path', None) or env_config.get("token_storage_path"),
+        token_storage_path=getattr(args, "token_storage_path", None)
+        or env_config.get("token_storage_path"),
         allow_prompt=allow_prompt,
-        orgplan_dir=getattr(args, 'orgplan_dir', None) or env_config.get("orgplan_dir", "."),
-        month=getattr(args, 'month', None) or env_config.get("month"),
-        dry_run=getattr(args, 'dry_run', False),
-        log_file=getattr(args, 'log_file', None) or env_config.get("log_file"),
+        orgplan_dir=getattr(args, "orgplan_dir", None) or env_config.get("orgplan_dir", "."),
+        month=getattr(args, "month", None) or env_config.get("month"),
+        dry_run=getattr(args, "dry_run", False),
+        log_file=getattr(args, "log_file", None) or env_config.get("log_file"),
     )
 
     # Validate configuration
