@@ -15,7 +15,9 @@ class OrgplanTask:
     priority: Optional[int] = None  # 1, 2, 3, etc. from #p1, #p2, #p3
     raw_line: str = ""  # Original line from TODO list
     detail_section: str = ""  # Content of the detail section
+    # Backend-specific task IDs
     ms_todo_id: Optional[str] = None  # Microsoft To Do task ID if synced
+    google_tasks_id: Optional[str] = None  # Google Tasks task ID if synced
     line_number: int = 0  # Line number in the file
 
 
@@ -27,7 +29,9 @@ class OrgplanParser:
     PRIORITY_PATTERN = re.compile(r"#p(\d+)")
     TIME_ESTIMATE_PATTERN = re.compile(r"#\d+[hd]")
     BLOCKED_PATTERN = re.compile(r"#blocked")
+    # Backend ID patterns
     MS_TODO_ID_PATTERN = re.compile(r"<!--\s*ms-todo-id:\s*([^\s]+)\s*-->")
+    GOOGLE_TASKS_ID_PATTERN = re.compile(r"<!--\s*google-tasks-id:\s*([^\s]+)\s*-->")
 
     def __init__(self, file_path: Path):
         """Initialize parser with orgplan file path.
@@ -180,10 +184,14 @@ class OrgplanParser:
         if section_lines:
             task.detail_section = "\n".join(section_lines).strip()
 
-            # Extract ms-todo-id if present
-            id_match = self.MS_TODO_ID_PATTERN.search(task.detail_section)
-            if id_match:
-                task.ms_todo_id = id_match.group(1)
+            # Extract backend IDs if present
+            ms_id_match = self.MS_TODO_ID_PATTERN.search(task.detail_section)
+            if ms_id_match:
+                task.ms_todo_id = ms_id_match.group(1)
+
+            google_id_match = self.GOOGLE_TASKS_ID_PATTERN.search(task.detail_section)
+            if google_id_match:
+                task.google_tasks_id = google_id_match.group(1)
 
     def update_task_status(self, task: OrgplanTask, new_status: Optional[str]):
         """Update task status in the orgplan file.
@@ -334,12 +342,12 @@ class OrgplanParser:
 
         return task
 
-    def add_detail_section(self, task: OrgplanTask, ms_todo_id: Optional[str] = None):
-        """Add or update detail section for a task.
+    def add_detail_section(self, task: OrgplanTask, **backend_ids):
+        """Add or update detail section for a task with backend IDs.
 
         Args:
             task: Task to add detail section for
-            ms_todo_id: Optional Microsoft To Do ID to include
+            **backend_ids: Backend IDs to add (e.g., ms_todo_id="xyz", google_tasks_id="abc")
         """
         if not self.lines:
             self.load()
@@ -362,26 +370,48 @@ class OrgplanParser:
             self.lines.append("")
             section_start = len(self.lines) - 2
 
-        # Add or update ms-todo-id marker
-        if ms_todo_id:
-            id_marker = f"<!-- ms-todo-id: {ms_todo_id} -->"
+        # Mapping of backend ID names to their patterns and marker formats
+        id_mappings = {
+            'ms_todo_id': (self.MS_TODO_ID_PATTERN, "ms-todo-id"),
+            'google_tasks_id': (self.GOOGLE_TASKS_ID_PATTERN, "google-tasks-id"),
+        }
+
+        # Add or update backend ID markers
+        for id_name, id_value in backend_ids.items():
+            if not id_value or id_name not in id_mappings:
+                continue
+
+            pattern, marker_name = id_mappings[id_name]
+            id_marker = f"<!-- {marker_name}: {id_value} -->"
 
             # Check if ID already exists in section
-            section_end = section_start + 1
+            id_found = False
             for i in range(section_start + 1, len(self.lines)):
                 if self.lines[i].startswith("# "):
-                    section_end = i
                     break
-                if self.MS_TODO_ID_PATTERN.search(self.lines[i]):
+                if pattern.search(self.lines[i]):
                     # Update existing ID
                     self.lines[i] = id_marker
-                    task.ms_todo_id = ms_todo_id
-                    return
+                    setattr(task, id_name, id_value)
+                    id_found = True
+                    break
 
-            # Insert new ID marker after section header
-            self.lines.insert(section_start + 1, "")
-            self.lines.insert(section_start + 2, id_marker)
-            task.ms_todo_id = ms_todo_id
+            if not id_found:
+                # Insert new ID marker after section header
+                # Find where to insert (after other ID markers if any)
+                insert_pos = section_start + 1
+                for i in range(section_start + 1, len(self.lines)):
+                    if self.lines[i].startswith("# "):
+                        break
+                    if any(pattern.search(self.lines[i]) for pattern, _ in id_mappings.values()):
+                        insert_pos = i + 1
+                    elif self.lines[i].strip() == "":
+                        continue
+                    else:
+                        break
+
+                self.lines.insert(insert_pos, id_marker)
+                setattr(task, id_name, id_value)
 
     def save(self):
         """Save changes back to the orgplan file."""
