@@ -202,8 +202,6 @@ def main():
         logger.info(f"✓ Month: {config.month}")
 
         # Validate orgplan file
-        from orgplan_parser import OrgplanParser
-
         parser = OrgplanParser(config.orgplan_file)
         parser.load()
         warnings = parser.validate()
