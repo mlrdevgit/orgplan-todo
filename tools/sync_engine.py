@@ -186,11 +186,12 @@ class SyncEngine:
             updates["status"] = desired_status
             changes.append(f"status: {todo_task.status} -> {desired_status}")
 
-        # Check importance
-        desired_importance = self._map_priority_to_importance(orgplan_task.priority)
-        if desired_importance != todo_task.importance:
-            updates["importance"] = desired_importance
-            changes.append(f"importance: {todo_task.importance} -> {desired_importance}")
+        # Check importance (only if backend supports priority)
+        if self.backend.supports_priority:
+            desired_importance = self._map_priority_to_importance(orgplan_task.priority)
+            if desired_importance != todo_task.importance:
+                updates["importance"] = desired_importance
+                changes.append(f"importance: {todo_task.importance} -> {desired_importance}")
 
         if not updates:
             self.logger.debug(f"Task '{orgplan_task.description}' is up to date")
@@ -361,7 +362,12 @@ class SyncEngine:
             True if task was created
         """
         status = self._map_todo_status_to_orgplan(todo_task.status)
-        priority = self._map_importance_to_priority(todo_task.importance)
+        # Only map priority if backend supports it
+        priority = (
+            self._map_importance_to_priority(todo_task.importance)
+            if self.backend.supports_priority
+            else None
+        )
 
         self.logger.info(f"Creating orgplan task: {todo_task.title}")
 
@@ -426,13 +432,14 @@ class SyncEngine:
                 self.orgplan_parser.update_task_status(orgplan_task, desired_status)
                 modified = True
 
-        # Check priority
-        desired_priority = self._map_importance_to_priority(todo_task.importance)
-        if desired_priority != orgplan_task.priority:
-            changes.append(f"priority: {orgplan_task.priority} -> {desired_priority}")
-            if not self.dry_run:
-                self.orgplan_parser.update_task_priority(orgplan_task, desired_priority)
-                modified = True
+        # Check priority (only if backend supports it)
+        if self.backend.supports_priority:
+            desired_priority = self._map_importance_to_priority(todo_task.importance)
+            if desired_priority != orgplan_task.priority:
+                changes.append(f"priority: {orgplan_task.priority} -> {desired_priority}")
+                if not self.dry_run:
+                    self.orgplan_parser.update_task_priority(orgplan_task, desired_priority)
+                    modified = True
 
         # Sync detail section body (only if orgplan detail section is empty)
         backend_id_attr = self.backend.id_marker_prefix.replace("-", "_")

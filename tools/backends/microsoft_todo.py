@@ -81,6 +81,11 @@ class MicrosoftTodoBackend(TaskBackend):
         """Return ID marker prefix for orgplan files."""
         return "ms-todo-id"
 
+    @property
+    def supports_priority(self) -> bool:
+        """Microsoft To Do supports task priority/importance."""
+        return True
+
     def authenticate(self):
         """Authenticate with Microsoft Graph API."""
         if self.auth_mode == "application":
