@@ -105,10 +105,11 @@ You should see green checkmarks indicating consent has been granted.
 4. Select **Delegated permissions**
 5. Search for and select:
    - **Tasks.ReadWrite** - Read and write your tasks
-   - **offline_access** - Maintain access to data you have given it access to
 6. Click **Add permissions**
 
 **No admin consent required** for delegated permissions. Users consent when they first log in.
+
+**Note:** The device code flow automatically includes refresh token support, so you don't need to explicitly add the `offline_access` permission.
 
 ## Step 5: Create .env File
 

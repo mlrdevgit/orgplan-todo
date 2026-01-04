@@ -41,8 +41,9 @@ class TodoClient:
 
     GRAPH_API_ENDPOINT = "https://graph.microsoft.com/v1.0"
     SCOPES_APPLICATION = ["https://graph.microsoft.com/.default"]
-    SCOPES_DELEGATED = ["Tasks.ReadWrite", "offline_access"]
-    REDIRECT_URI = "http://localhost:8080"
+    # For delegated permissions, offline_access is implicit in device code flow
+    # and shouldn't be explicitly requested (it's a reserved scope)
+    SCOPES_DELEGATED = ["Tasks.ReadWrite"]
 
     def __init__(
         self,
