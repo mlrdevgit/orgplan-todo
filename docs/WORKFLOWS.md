@@ -4,11 +4,51 @@ This guide shows common workflows and usage patterns for orgplan-todo sync.
 
 ## Table of Contents
 
+- [Backend Selection](#backend-selection)
 - [First-Time Setup](#first-time-setup)
 - [Daily Workflows](#daily-workflows)
 - [Monthly Workflows](#monthly-workflows)
 - [Troubleshooting Workflows](#troubleshooting-workflows)
 - [Advanced Workflows](#advanced-workflows)
+
+## Backend Selection
+
+This tool supports two backends: **Microsoft To Do** and **Google Tasks**.
+
+### Choosing a Backend
+
+**Microsoft To Do:**
+- ✅ Supports priority (High/Normal/Low)
+- ✅ Two authentication modes (Application/Delegated)
+- ✅ Good for enterprise environments
+- ❌ Requires Azure app registration
+
+**Google Tasks:**
+- ✅ Simple OAuth setup
+- ✅ Personal Google account friendly
+- ✅ No admin consent required
+- ❌ No priority support
+
+### Configuration
+
+**Microsoft To Do:**
+```bash
+# In .env file
+TASK_BACKEND=microsoft
+MS_CLIENT_ID=your_client_id
+MS_TENANT_ID=your_tenant_id
+MS_CLIENT_SECRET=your_secret  # For application mode
+TODO_LIST_NAME=Orgplan 2025
+```
+
+**Google Tasks:**
+```bash
+# In .env file
+TASK_BACKEND=google
+GOOGLE_CLIENT_ID=your_client_id
+GOOGLE_CLIENT_SECRET=your_client_secret
+GOOGLE_TASK_LIST_NAME=My Tasks
+```
 
 ## First-Time Setup
 
@@ -66,6 +106,49 @@ python tools/sync.py --todo-list "Orgplan 2025"
 TODO_LIST_NAME="Orgplan 2025" SCHEDULE="*/30 * * * *" tools/setup_cron.sh
 ```
 
+### Complete Setup with Google Tasks
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/mlrdevgit/orgplan-todo.git
+cd orgplan-todo
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Create orgplan directory structure
+mkdir -p 2025
+
+# 4. Create first monthly file
+cat > 2025/12-notes.md << 'EOF'
+# TODO List
+
+- Setup orgplan-todo sync
+- Review project documentation
+- Plan weekly goals
+EOF
+
+# 5. Setup Google OAuth (see GOOGLE_TASKS_SETUP.md)
+# Follow the guide to get OAuth credentials from Google Cloud Console
+
+# 6. Configure .env file
+cp .env.example .env
+nano .env  # Add: TASK_BACKEND=google, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+
+# 7. Validate configuration
+python tools/sync.py --validate-config
+
+# 8. First sync (interactive authentication)
+python tools/sync.py --backend google --todo-list "My Tasks"
+# Browser will open for OAuth consent
+
+# 9. Subsequent syncs (uses cached tokens)
+python tools/sync.py --backend google
+
+# 10. Setup automated sync
+# Create a cron job with --backend google --no-prompt
+```
+
 ## Daily Workflows
 
 ### Morning Routine
@@ -116,13 +199,22 @@ python tools/sync.py --todo-list "Orgplan 2025"
 # Task appears in To Do within seconds
 ```
 
-**From To Do App:**
+**From Microsoft To Do App:**
 ```
 1. Open Microsoft To Do
 2. Add task: "Buy groceries"
 3. Set importance: High
 4. Wait for next sync (or run manually)
 5. Task appears in orgplan with #p1 priority
+```
+
+**From Google Tasks App:**
+```
+1. Open Google Tasks (web, Gmail sidebar, or mobile app)
+2. Add task: "Buy groceries"
+3. (No priority - Google Tasks doesn't support it)
+4. Wait for next sync (or run manually)
+5. Task appears in orgplan without priority tag
 ```
 
 ## Monthly Workflows
@@ -243,6 +335,33 @@ python tools/sync.py --todo-list "Orgplan 2025"
 ```
 
 ## Advanced Workflows
+
+### Switching Between Backends
+
+```bash
+# Current setup: Microsoft To Do
+# Want to try: Google Tasks
+
+# 1. Add Google credentials to .env
+nano .env
+# Add: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET
+
+# 2. Test Google Tasks (dry run)
+python tools/sync.py --backend google --dry-run
+
+# 3. First sync with Google (interactive auth)
+python tools/sync.py --backend google --todo-list "My Tasks"
+
+# 4. Tasks will get both ID markers:
+# <!-- ms-todo-id: AAMkAGI2T... -->
+# <!-- google-tasks-id: MTIzNDU2... -->
+
+# 5. Switch backends anytime
+python tools/sync.py --backend microsoft  # Use Microsoft
+python tools/sync.py --backend google     # Use Google
+
+# Note: Priority tags only sync with Microsoft To Do
+```
 
 ### Multiple Orgplan Setups
 

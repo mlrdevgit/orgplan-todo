@@ -152,7 +152,7 @@ rm -rf .tokens/
 python tools/sync.py --todo-list "Orgplan 2025" --auth-mode delegated
 ```
 
-### Application Authentication Issues
+### Application Authentication Issues (Microsoft)
 
 ### "Authentication failed: AADSTS700016"
 
@@ -202,13 +202,123 @@ API request failed: 403 - {"error": {"code": "Forbidden", "message": "Insufficie
 4. Click "Grant admin consent"
 5. Wait a few minutes for changes to propagate
 
-## Sync Issues
+### Google Tasks Authentication Issues
 
-### "To Do list not found"
+#### "Authentication required but interactive prompt is disabled" (Google)
 
 **Symptoms:**
 ```
-To Do list 'Orgplan 2025' not found
+Exception: Authentication required but interactive prompt is disabled (--no-prompt).
+Run sync manually without --no-prompt to authenticate.
+```
+
+**Cause:** Using `--no-prompt` flag but Google OAuth tokens don't exist or have expired
+
+**Solution:**
+```bash
+# First, authenticate interactively without --no-prompt
+python tools/sync.py --backend google --todo-list "My Tasks"
+
+# Follow the OAuth flow in your browser
+# After successful login, cron jobs with --no-prompt will work
+```
+
+#### "Failed to refresh token" (Google)
+
+**Symptoms:**
+```
+WARNING: Failed to refresh token: invalid_grant
+```
+
+**Cause:** Refresh token has expired or been revoked
+
+**Solution:**
+```bash
+# Delete old tokens and re-authenticate
+rm -rf .tokens/google_tokens.json
+python tools/sync.py --backend google --todo-list "My Tasks"
+```
+
+#### "Invalid client_id or client_secret" (Google)
+
+**Symptoms:**
+```
+Authentication failed: invalid_client
+```
+
+**Cause:** Incorrect Google OAuth credentials
+
+**Solution:**
+1. Go to Google Cloud Console > APIs & Services > Credentials
+2. Find your OAuth 2.0 Client ID
+3. Verify the Client ID and Client Secret
+4. Update `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`
+5. Ensure no extra spaces or quotes
+
+#### "Access blocked: Authorization Error" (Google)
+
+**Symptoms:**
+```
+This app is blocked
+This app tried to access sensitive info in your Google Account
+```
+
+**Cause:** OAuth consent screen not configured or app not verified
+
+**Solution:**
+1. Go to Google Cloud Console > APIs & Services > OAuth consent screen
+2. Ensure consent screen is configured
+3. For personal use, set "User type" to "External"
+4. Add your email as a test user
+5. No verification required for personal use with test users
+
+#### "insufficient_scope" (Google)
+
+**Symptoms:**
+```
+API request failed: 403 - insufficient authentication scopes
+```
+
+**Cause:** Missing required OAuth scopes
+
+**Solution:**
+1. Delete cached tokens: `rm -rf .tokens/google_tokens.json`
+2. Re-authenticate to request proper scopes
+3. Ensure `https://www.googleapis.com/auth/tasks` scope is included
+
+#### Browser doesn't open for OAuth (Google)
+
+**Symptoms:** No browser window opens during authentication
+
+**Solution:**
+1. The script will print a URL - copy and paste it into your browser
+2. Or manually open: `http://localhost:XXXXX` (shown in console)
+3. Complete the OAuth flow
+4. Grant permissions when prompted
+
+#### "redirect_uri_mismatch" (Google)
+
+**Symptoms:**
+```
+Error 400: redirect_uri_mismatch
+```
+
+**Cause:** OAuth client not configured for local redirect
+
+**Solution:**
+1. Go to Google Cloud Console > Credentials > Your OAuth Client
+2. Under "Authorized redirect URIs", add:
+   - `http://localhost`
+   - `urn:ietf:wg:oauth:2.0:oob`
+3. Save and wait a few minutes for changes to propagate
+
+## Sync Issues
+
+### "Task list not found"
+
+**Symptoms:**
+```
+Task list 'Orgplan 2025' not found
 Available lists:
   - Tasks
   - Work Tasks
@@ -217,6 +327,8 @@ Available lists:
 **Cause:** List name doesn't match or doesn't exist
 
 **Solution:**
+
+**Microsoft To Do:**
 
 **Option 1:** Use existing list
 ```bash
@@ -229,7 +341,26 @@ python tools/sync.py --todo-list "Tasks"
 3. Name it exactly "Orgplan 2025"
 4. Run sync again
 
-**Note:** List names are case-sensitive!
+**Google Tasks:**
+
+**Option 1:** Use existing list
+```bash
+python tools/sync.py --backend google --todo-list "My Tasks"
+```
+
+**Option 2:** Use primary list (default)
+```bash
+# If no list name specified, uses primary list
+python tools/sync.py --backend google
+```
+
+**Option 3:** Create a new list
+1. Open Google Tasks (web, mobile, or Gmail sidebar)
+2. Click the current list name dropdown
+3. Click "Create new list"
+4. Name it and sync with that name
+
+**Note:** List names are case-sensitive for both backends!
 
 ### "Another sync is already running"
 
@@ -400,8 +531,10 @@ NetworkError: Request timed out: HTTPSConnectionPool...
 **Solution:**
 - Check internet connection
 - The script automatically retries with backoff
-- If persistent, check Microsoft service status
-- Consider increasing timeout (edit `todo_client.py` line with `timeout=30`)
+- If persistent, check service status:
+  - Microsoft: [Microsoft Service Health](https://portal.office.com/servicestatus)
+  - Google: [Google Workspace Status](https://www.google.com/appsstatus)
+- Network timeouts are handled automatically with retry logic
 
 ### "Connection failed"
 
@@ -415,7 +548,11 @@ NetworkError: Connection failed: [Errno 11001] getaddrinfo failed
 **Solution:**
 1. Check internet connection:
    ```bash
+   # For Microsoft To Do
    ping graph.microsoft.com
+
+   # For Google Tasks
+   ping www.googleapis.com
    ```
 2. Check firewall settings
 3. Verify proxy configuration if behind corporate firewall

@@ -1,14 +1,17 @@
 # orgplan-todo
 
-Synchronize tasks between your orgplan productivity system and Microsoft To Do using the Graph API.
+Synchronize tasks between your orgplan productivity system and Microsoft To Do or Google Tasks.
 
 ## Features
 
-- **Bidirectional sync** between orgplan markdown files and Microsoft To Do
-- **Two authentication modes**: Application (client credentials) or Delegated (user login)
+- **Multiple backends**: Choose between Microsoft To Do or Google Tasks
+- **Bidirectional sync** between orgplan markdown files and your task backend
+- **Flexible authentication**:
+  - Microsoft: Application (client credentials) or Delegated (user login)
+  - Google: OAuth 2.0 with interactive login
 - **Intelligent task matching** using unique IDs and title fallback
 - **Status synchronization** in both directions (DONE ↔ Completed, PENDING/Active)
-- **Priority mapping** (#p1 ↔ High, #p2 ↔ Normal, #p3+ ↔ Low)
+- **Priority mapping** for Microsoft To Do (#p1 ↔ High, #p2 ↔ Normal, #p3+ ↔ Low)
 - **New task creation** from either system
 - **Detail section sync** with orgplan taking precedence
 - **Automated sync** with file locking and cron support
@@ -31,14 +34,16 @@ pip install -r requirements.txt
 3. Set up configuration:
 ```bash
 cp .env.example .env
-# Edit .env with your Microsoft Graph API credentials
+# Edit .env with your backend credentials (Microsoft or Google)
 ```
 
 ## Configuration
 
-### Microsoft Graph API Setup
+### Authentication Setup
 
-This tool supports two authentication modes:
+#### Microsoft To Do
+
+This tool supports two authentication modes for Microsoft To Do:
 
 **1. Application Mode (Client Credentials)**
 - Best for: Server automation, background sync
@@ -52,7 +57,31 @@ This tool supports two authentication modes:
 - No admin consent required
 - One-time interactive login, then tokens cached
 
-📖 **[Complete Setup Guide](docs/GRAPH_API_SETUP.md)** - Step-by-step instructions for both modes
+#### Google Tasks
+
+Google Tasks uses OAuth 2.0 for authentication:
+
+- **Authentication Mode**: OAuth 2.0 (User consent)
+- **Best for**: Personal use, individual Google accounts
+- **Requires**: Client ID, Client Secret from Google Cloud Console
+- **Setup**: One-time interactive login, tokens cached locally
+- **No admin consent required** for personal accounts
+
+📖 **Setup Guides:**
+- **[Microsoft To Do Setup](docs/GRAPH_API_SETUP.md)** - Complete guide for both authentication modes
+- **[Google Tasks Setup](docs/GOOGLE_TASKS_SETUP.md)** - OAuth 2.0 setup for Google Tasks
+
+### Backend Selection
+
+Choose your backend in `.env`:
+```env
+TASK_BACKEND=microsoft  # or "google"
+```
+
+Or via CLI:
+```bash
+python tools/sync.py --backend google --todo-list "My Tasks"
+```
 
 ### Configuration Options
 
@@ -61,18 +90,33 @@ Configuration can be provided via (in order of precedence):
 2. Environment variables
 3. `.env` file
 
+#### Common Options
+
+| Parameter | CLI Option | Env Var | Required | Default |
+|-----------|------------|---------|----------|---------|
+| Backend | `--backend` | `TASK_BACKEND` | No | `microsoft` |
+| Task List Name | `--todo-list` | `TODO_LIST_NAME` or `GOOGLE_TASK_LIST_NAME` | Yes (optional for Google primary list) | - |
+| Token Storage | `--token-storage-path` | `TOKEN_STORAGE_PATH` | No | `.tokens/` |
+| Allow Prompt | `--no-prompt` | - | No | `true` |
+| Orgplan Directory | `--orgplan-dir` | `ORGPLAN_DIR` | No | `.` (current) |
+| Month | `--month` | `SYNC_MONTH` | No | Current month |
+| Log File | `--log-file` | `LOG_FILE` | No | None |
+
+#### Microsoft To Do Options
+
 | Parameter | CLI Option | Env Var | Required | Default |
 |-----------|------------|---------|----------|---------|
 | Auth Mode | `--auth-mode` | `AUTH_MODE` | No | `application` |
 | Client ID | `--client-id` | `MS_CLIENT_ID` | Yes | - |
 | Tenant ID | `--tenant-id` | `MS_TENANT_ID` | Yes | - |
 | Client Secret | `--client-secret` | `MS_CLIENT_SECRET` | Application mode only | - |
-| Token Storage | `--token-storage-path` | `TOKEN_STORAGE_PATH` | No | `.tokens/` |
-| Allow Prompt | `--no-prompt` | - | No | `true` |
-| To Do List Name | `--todo-list` | `TODO_LIST_NAME` | Yes | - |
-| Orgplan Directory | `--orgplan-dir` | `ORGPLAN_DIR` | No | `.` (current) |
-| Month | `--month` | `SYNC_MONTH` | No | Current month |
-| Log File | `--log-file` | `LOG_FILE` | No | None |
+
+#### Google Tasks Options
+
+| Parameter | CLI Option | Env Var | Required | Default |
+|-----------|------------|---------|----------|---------|
+| Client ID | - | `GOOGLE_CLIENT_ID` | Yes | - |
+| Client Secret | - | `GOOGLE_CLIENT_SECRET` | Yes | - |
 
 ## Usage
 
@@ -110,11 +154,27 @@ python tools/sync.py --todo-list "Orgplan 2025" --month 2025-11
 python tools/sync.py --todo-list "Orgplan 2025" --log-file sync.log
 ```
 
+### Google Tasks
+
+```bash
+# First-time: Interactive login required
+python tools/sync.py --backend google --todo-list "My Tasks"
+
+# Use primary task list (default)
+python tools/sync.py --backend google
+
+# Subsequent runs: Uses cached tokens
+python tools/sync.py --backend google
+```
+
 ### Automated Sync (Cron Job)
 
 ```bash
-# For delegated mode, use --no-prompt to prevent blocking
+# For delegated mode (Microsoft) or Google Tasks, use --no-prompt to prevent blocking
 python tools/sync.py --todo-list "Orgplan 2025" --auth-mode delegated --no-prompt --log-file sync.log
+
+# Google Tasks cron example
+python tools/sync.py --backend google --no-prompt --log-file sync.log
 ```
 
 ### Override Configuration
@@ -155,6 +215,7 @@ Each monthly file starts with a `# TODO List` section:
 # Learn how to refine an LLM
 
 <!-- ms-todo-id: AAMkAGI2T... -->
+<!-- google-tasks-id: MTIzNDU2Nzg5... -->
 
 ## Steps
 
@@ -174,48 +235,54 @@ Each monthly file starts with a `# TODO List` section:
 - **Time estimates**: `#1h`, `#2h`, `#1d` (ignored by sync)
 - **#blocked**: Indicates blocked task (ignored by sync)
 
-## Sync Behavior (Bidirectional - Phase 2)
+## Sync Behavior (Bidirectional)
 
-### Orgplan → To Do
+### Orgplan → Backend (Microsoft/Google)
 
-- New tasks in orgplan → Created in To Do
+- New tasks in orgplan → Created in task backend
 - Status changes → Update completion status
-- Priority changes → Update importance
+- Priority changes → Update importance (Microsoft only)
 - Title changes → Update task title
-- `[DONE]` or `[DELEGATED]` → Mark completed in To Do
-- Tasks with existing `<!-- ms-todo-id: X -->` are matched by ID
+- `[DONE]` or `[DELEGATED]` → Mark completed in backend
+- Tasks with existing backend ID markers are matched by ID
 - Tasks without ID are matched by title
 
-### To Do → Orgplan
+### Backend → Orgplan
 
-- New tasks in To Do → Created in orgplan TODO list
-- Task completed in To Do → Mark `[DONE]` in orgplan
+- New tasks in backend → Created in orgplan TODO list
+- Task completed in backend → Mark `[DONE]` in orgplan
 - Title changes → Update task description
-- Importance changes → Update priority tags
+- **Microsoft only**: Importance changes → Update priority tags
   - `high` → `#p1`
   - `normal` → `#p2`
   - `low` → `#p3`
-- To Do notes → Added to detail section (only if orgplan detail section is empty)
+- **Google**: Priority tags are ignored (Google Tasks doesn't support priority)
+- Backend notes → Added to detail section (only if orgplan detail section is empty)
 
 ### Task Matching
 
 Tasks are matched between systems using:
-1. **Primary:** `ms-todo-id` marker in orgplan detail section
+1. **Primary:** Backend-specific ID marker in orgplan detail section
+   - Microsoft: `<!-- ms-todo-id: X -->`
+   - Google: `<!-- google-tasks-id: X -->`
 2. **Fallback:** Exact title matching (case-sensitive)
+
+**Note:** Tasks can have both Microsoft and Google ID markers. This allows switching backends without creating duplicates (each backend only looks for its own marker).
 
 ### Detail Section Sync
 
-- **Orgplan takes precedence:** If orgplan has content in the detail section, it is NOT overwritten by To Do notes
-- **Empty orgplan detail:** To Do notes can be synced to empty orgplan detail sections
-- The `<!-- ms-todo-id: X -->` marker is always maintained for task matching
+- **Orgplan takes precedence:** If orgplan has content in the detail section, it is NOT overwritten by backend notes
+- **Empty orgplan detail:** Backend notes can be synced to empty orgplan detail sections
+- Backend ID markers are always maintained for task matching
 
 ### Excluded from Sync
 
 - Tasks already marked `[DONE]` in prior monthly files
-- Completed To Do tasks not present in current orgplan (likely from previous months)
+- Completed backend tasks not present in current orgplan (likely from previous months)
 - Time estimates (`#1h`, `#2h`, `#1d`)
 - `#blocked` tag
 - Task deletions (ignored in both directions)
+- Priority tags when using Google Tasks backend (not supported)
 
 ## Automated Sync with Cron
 
@@ -262,12 +329,18 @@ The script exits with different codes based on the outcome:
 
 ## Troubleshooting
 
-### "To Do list not found" Error
+### "Task list not found" Error
 
-The script will list all available To Do lists. Make sure the name matches exactly:
+The script will list all available task lists. Make sure the name matches exactly:
 ```bash
+# Microsoft To Do
 python tools/sync.py --todo-list "Orgplan 2025"
+
+# Google Tasks
+python tools/sync.py --backend google --todo-list "My Tasks"
 ```
+
+For Google Tasks, if no list is specified, the primary list is used automatically.
 
 ### "Orgplan file does not exist" Error
 
@@ -278,11 +351,18 @@ Ensure the monthly file exists for the month you're syncing:
 
 ### Authentication Errors
 
-Verify your Microsoft Graph API credentials are correct:
-- Client ID
-- Tenant ID
-- Client Secret
-- App has `Tasks.ReadWrite` permission
+**Microsoft To Do:**
+- Verify Client ID, Tenant ID, and Client Secret (for application mode)
+- Ensure app has `Tasks.ReadWrite` permission
+- For delegated mode, run without `--no-prompt` first to authenticate
+
+**Google Tasks:**
+- Verify Client ID and Client Secret from Google Cloud Console
+- Ensure OAuth 2.0 consent screen is configured
+- Run without `--no-prompt` first to complete interactive authentication
+- Check that tokens are saved to `.tokens/google_tokens.json`
+
+For detailed troubleshooting, see [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
 ## Documentation
 
@@ -306,6 +386,25 @@ python tools/sync.py --todo-list "Orgplan 2025" -v --log-file sync.log
 # Setup automated sync
 TODO_LIST_NAME="Orgplan 2025" tools/setup_cron.sh
 ```
+
+## Backend Comparison
+
+| Feature | Microsoft To Do | Google Tasks |
+|---------|----------------|--------------|
+| **Authentication** | Application or Delegated (MSAL) | OAuth 2.0 (User consent) |
+| **Admin Consent** | Required for application mode | Not required |
+| **Priority Support** | ✅ Yes (High/Normal/Low) | ❌ No |
+| **Task Notes/Body** | ✅ Yes | ✅ Yes |
+| **Completion Status** | ✅ Yes | ✅ Yes |
+| **Multiple Lists** | ✅ Yes | ✅ Yes |
+| **ID Marker** | `ms-todo-id` | `google-tasks-id` |
+| **Token Storage** | `.tokens/msal_cache.bin` | `.tokens/google_tokens.json` |
+| **Cron Support** | ✅ Yes | ✅ Yes |
+| **Default List** | Must specify | Uses primary if not specified |
+
+**Choosing a Backend:**
+- **Microsoft To Do**: Best if you need priority support, work in enterprise environment, or prefer Microsoft ecosystem
+- **Google Tasks**: Best if you use personal Google account, prefer simpler OAuth setup, don't need priority levels
 
 ## Development Roadmap
 
