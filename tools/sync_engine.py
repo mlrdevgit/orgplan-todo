@@ -61,12 +61,6 @@ class SyncEngine:
         # Process each orgplan task
         for orgplan_task in orgplan_tasks:
             try:
-                # Skip tasks that are already done
-                if orgplan_task.status == "DONE":
-                    self.logger.debug(f"Skipping completed task: {orgplan_task.description}")
-                    stats["skipped"] += 1
-                    continue
-
                 # Find matching To Do task
                 todo_task = self._find_matching_todo_task(orgplan_task, todo_by_id, todo_by_title)
 
