@@ -47,9 +47,15 @@ class OrgplanParser:
 
     def load(self):
         """Load the orgplan file."""
-        with open(self.file_path, "r", encoding="utf-8") as f:
-            self.content = f.read()
-            self.lines = self.content.splitlines()
+        try:
+            with open(self.file_path, "r", encoding="utf-8") as f:
+                self.content = f.read()
+        except UnicodeDecodeError:
+            # Fallback to CP1252 (Windows default) if UTF-8 fails
+            with open(self.file_path, "r", encoding="cp1252") as f:
+                self.content = f.read()
+        
+        self.lines = self.content.splitlines()
 
     def validate(self) -> list[str]:
         """Validate orgplan file format.
