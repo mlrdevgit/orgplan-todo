@@ -284,15 +284,30 @@ Tasks are matched between systems using:
 - Task deletions (ignored in both directions)
 - Priority tags when using Google Tasks backend (not supported)
 
-## Automated Sync with Cron
+## Automated Sync
 
-### Quick Setup (Recommended)
+
+### Quick Setup (Linux/macOS - Cron)
 
 Use the automated setup script:
 ```bash
 cd orgplan-todo
 TODO_LIST_NAME="Orgplan 2025" SCHEDULE="*/30 * * * *" tools/setup_cron.sh
 ```
+
+### Quick Setup (Windows - Task Scheduler)
+
+Use the automated PowerShell script:
+```powershell
+cd orgplan-todo
+.\tools\setup_tasksched.ps1 -TodoList "Orgplan 2025" -ScheduleMinutes 30
+```
+
+This script will:
+- Create a Windows Scheduled Task
+- Set up logging to `sync.log`
+- Handle execution parameters
+
 
 This script will:
 - Validate your `.env` file exists
@@ -383,8 +398,12 @@ python tools/sync.py --todo-list "Orgplan 2025" --dry-run
 # Full sync with logging
 python tools/sync.py --todo-list "Orgplan 2025" -v --log-file sync.log
 
-# Setup automated sync
+# Setup automated sync (Linux/macOS)
 TODO_LIST_NAME="Orgplan 2025" tools/setup_cron.sh
+
+# Setup automated sync (Windows)
+.\tools\setup_tasksched.ps1 -TodoList "Orgplan 2025"
+
 ```
 
 ## Backend Comparison
@@ -432,7 +451,9 @@ See [PLAN.md](PLAN.md) for the complete project plan.
 ### Phase 4: Automation ✓
 - File-based locking for concurrent prevention
 - Cron setup script (tools/setup_cron.sh)
+- Windows Task Scheduler script (tools/setup_tasksched.ps1)
 - Automated lock cleanup
+
 - Stale lock detection
 - Production-ready for scheduled execution
 
