@@ -24,6 +24,7 @@ class GoogleTasksBackend(TaskBackend):
 
     # OAuth 2.0 scopes
     SCOPES = ["https://www.googleapis.com/auth/tasks"]
+    service = None
 
     def __init__(
         self,

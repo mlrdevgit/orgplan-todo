@@ -74,11 +74,9 @@ class TestMultipleIDMarkers(unittest.TestCase):
     def test_orgplan_task_has_both_id_fields(self):
         """Test that OrgplanTask supports both ID markers."""
         task = OrgplanTask(
-            title="Test Task",
+            description="Test Task",
             status=None,
             priority=None,
-            time_estimate=None,
-            blocked=False,
             detail_section="",
             ms_todo_id="ms-id-123",
             google_tasks_id="google-id-456",
@@ -111,7 +109,7 @@ Task details here.
         try:
             parser = OrgplanParser(temp_path)
             parser.load()
-            tasks = parser.extract_tasks()
+            tasks = parser.parse_tasks()
 
             self.assertEqual(len(tasks), 1)
             task = tasks[0]
@@ -136,7 +134,7 @@ Task details here.
         try:
             parser = OrgplanParser(temp_path)
             parser.load()
-            tasks = parser.extract_tasks()
+            tasks = parser.parse_tasks()
             task = tasks[0]
 
             # Add both markers
@@ -146,7 +144,7 @@ Task details here.
             # Re-parse
             parser2 = OrgplanParser(temp_path)
             parser2.load()
-            tasks2 = parser2.extract_tasks()
+            tasks2 = parser2.parse_tasks()
 
             self.assertEqual(tasks2[0].ms_todo_id, "ms-id-123")
             self.assertEqual(tasks2[0].google_tasks_id, "google-id-456")
@@ -181,11 +179,9 @@ class TestBackendAgnosticSync(unittest.TestCase):
     def test_dynamic_id_marker_lookup(self):
         """Test dynamic ID marker lookup on task."""
         task = OrgplanTask(
-            title="Test",
+            description="Test",
             status=None,
             priority=None,
-            time_estimate=None,
-            blocked=False,
             detail_section="",
             ms_todo_id="ms-123",
             google_tasks_id="google-456",
@@ -208,11 +204,9 @@ class TestBackendSwitching(unittest.TestCase):
     def test_task_with_only_ms_marker(self):
         """Test task that only has Microsoft ID."""
         task = OrgplanTask(
-            title="Test",
+            description="Test",
             status=None,
             priority=None,
-            time_estimate=None,
-            blocked=False,
             detail_section="",
             ms_todo_id="ms-123",
             google_tasks_id=None,
@@ -231,11 +225,9 @@ class TestBackendSwitching(unittest.TestCase):
     def test_task_with_only_google_marker(self):
         """Test task that only has Google ID."""
         task = OrgplanTask(
-            title="Test",
+            description="Test",
             status=None,
             priority=None,
-            time_estimate=None,
-            blocked=False,
             detail_section="",
             ms_todo_id=None,
             google_tasks_id="google-456",
@@ -254,11 +246,9 @@ class TestBackendSwitching(unittest.TestCase):
     def test_task_with_both_markers(self):
         """Test task that has both markers."""
         task = OrgplanTask(
-            title="Test",
+            description="Test",
             status=None,
             priority=None,
-            time_estimate=None,
-            blocked=False,
             detail_section="",
             ms_todo_id="ms-123",
             google_tasks_id="google-456",

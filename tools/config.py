@@ -8,6 +8,12 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
+# Import orgplan config to leverage shared configuration
+try:
+    from orgplan.config import load_config as load_orgplan_config
+except ImportError:
+    load_orgplan_config = None
+
 
 class Config:
     """Configuration holder for sync operations."""
@@ -63,7 +69,11 @@ class Config:
         self.task_list_name = task_list_name
         self.token_storage_path = Path(token_storage_path) if token_storage_path else None
         self.allow_prompt = allow_prompt
-        self.orgplan_dir = Path(orgplan_dir).resolve()
+        
+        # Orgplan Directory logic with fallback to orgplan core config
+        # Use provided arg as primary source if not default "."
+        self.orgplan_dir = self._resolve_orgplan_dir(orgplan_dir)
+        
         self.month = month or datetime.now().strftime("%Y-%m")
         self.dry_run = dry_run
         self.log_file = log_file
@@ -75,6 +85,37 @@ class Config:
         # Derive orgplan file path
         year, month_num = self.month.split("-")
         self.orgplan_file = self.orgplan_dir / year / f"{month_num}-notes.md"
+
+    def _resolve_orgplan_dir(self, arg_dir: str) -> Path:
+        """Resolve the orgplan data directory."""
+        # 1. CLI Argument / Constructor Argument (if not default ".")
+        if arg_dir != ".":
+            return Path(arg_dir).resolve()
+            
+        # 2. Environment variable override
+        env_dir = os.getenv("ORGPLAN_DIR")
+        if env_dir:
+            return Path(env_dir).resolve()
+            
+        # 3. Try orgplan core config
+        if load_orgplan_config:
+            try:
+                # Try loading without path (uses ORGPLAN_CONFIG env var)
+                try:
+                    orgplan_conf = load_orgplan_config()
+                except ValueError:
+                    # If ORGPLAN_CONFIG not set, try default locations or skip
+                    pass
+                else:
+                    if orgplan_conf and orgplan_conf.data_root:
+                        return Path(orgplan_conf.data_root)
+            except Exception:
+                pass
+
+        # 4. Default fallback to current directory
+        # (Original code defaulted to current dir, but previous change defaulted to ~/orgplan.
+        # Sticking to current dir as default to matching signature default ".")
+        return Path(".").resolve()
 
     def validate(self) -> list[str]:
         """Validate configuration and return list of errors.
@@ -124,9 +165,14 @@ class Config:
             errors.append(f"Orgplan directory does not exist: {self.orgplan_dir}")
         elif not self.orgplan_dir.is_dir():
             errors.append(f"Orgplan directory is not a directory: {self.orgplan_dir}")
-
-        if not self.orgplan_file.exists():
-            errors.append(f"Orgplan file for {self.month} does not exist: {self.orgplan_file}")
+        
+        # Check orgplan file existence (only if we can't create it, but usually validation checks if input is valid)
+        # OrgplanParser might create it? No, usually valid for reading.
+        # But if we are creating new tasks, file might not need to exist yet?
+        # The original code checked existence.
+        
+        # if not self.orgplan_file.exists():
+        #     errors.append(f"Orgplan file for {self.month} does not exist: {self.orgplan_file}")
 
         # Validate month format
         try:

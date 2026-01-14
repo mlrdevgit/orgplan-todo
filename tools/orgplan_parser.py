@@ -5,6 +5,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+try:
+    from orgplan.markup import parse_title_parts
+except ImportError:
+    # Fallback if orgplan not installed/found
+    parse_title_parts = None
+
 
 @dataclass
 class OrgplanTask:
@@ -141,23 +147,49 @@ class OrgplanParser:
         # Remove leading "- "
         content = line.strip()[2:]
 
-        # Extract status
-        status_match = self.STATUS_PATTERN.search(content)
-        status = status_match.group(1) if status_match else None
+        if parse_title_parts:
+            # Use orgplan parsing logic
+            state, tags, title = parse_title_parts(content)
+            
+            # Map state
+            status = None
+            if state == "done":
+                status = "DONE"
+            elif state == "pending":
+                status = "PENDING"
+            elif state == "delegated":
+                status = "DELEGATED"
+            elif state == "canceled":
+                status = "CANCELED"
+            
+            # Map priority from tags
+            priority = None
+            for tag in tags:
+                if tag.startswith("p") and tag[1:].isdigit():
+                    priority = int(tag[1:])
+                    break
+            
+            description = title
+        else:
+            # Legacy regex parsing (fallback)
+            
+            # Extract status
+            status_match = self.STATUS_PATTERN.search(content)
+            status = status_match.group(1) if status_match else None
 
-        # Extract priority
-        priority_match = self.PRIORITY_PATTERN.search(content)
-        priority = int(priority_match.group(1)) if priority_match else None
+            # Extract priority
+            priority_match = self.PRIORITY_PATTERN.search(content)
+            priority = int(priority_match.group(1)) if priority_match else None
 
-        # Remove status blocks, tags, and other metadata to get description
-        description = content
-        description = self.STATUS_PATTERN.sub("", description)
-        description = self.PRIORITY_PATTERN.sub("", description)
-        description = self.TIME_ESTIMATE_PATTERN.sub("", description)
-        description = self.BLOCKED_PATTERN.sub("", description)
-        # Remove any remaining custom tags (e.g., #uma, #tag, #custom)
-        description = self.CUSTOM_TAG_PATTERN.sub("", description)
-        description = description.strip()
+            # Remove status blocks, tags, and other metadata to get description
+            description = content
+            description = self.STATUS_PATTERN.sub("", description)
+            description = self.PRIORITY_PATTERN.sub("", description)
+            description = self.TIME_ESTIMATE_PATTERN.sub("", description)
+            description = self.BLOCKED_PATTERN.sub("", description)
+            # Remove any remaining custom tags (e.g., #uma, #tag, #custom)
+            description = self.CUSTOM_TAG_PATTERN.sub("", description)
+            description = description.strip()
 
         if not description:
             return None

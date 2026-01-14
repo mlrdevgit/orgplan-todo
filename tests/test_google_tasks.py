@@ -14,6 +14,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, MagicMock, patch, mock_open
 import json
+import tempfile
+import shutil
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "tools"))
@@ -29,20 +31,23 @@ class TestGoogleTasksBackend(unittest.TestCase):
         """Set up test fixtures."""
         self.client_id = "test_client_id"
         self.client_secret = "test_client_secret"
-        self.token_path = Path("/tmp/test_google_tokens.json")
+        
+        # Create a temporary directory
+        self.test_dir = tempfile.mkdtemp()
+        self.token_path = Path(self.test_dir) / "test_google_tokens.json"
 
         # Create backend instance
         self.backend = GoogleTasksBackend(
             client_id=self.client_id,
             client_secret=self.client_secret,
-            token_storage_path=Path("/tmp"),
+            token_storage_path=Path(self.test_dir),
             allow_prompt=False,  # No interactive prompts in tests
         )
 
     def tearDown(self):
         """Clean up test files."""
-        if self.token_path.exists():
-            self.token_path.unlink()
+        if os.path.exists(self.test_dir):
+            shutil.rmtree(self.test_dir)
 
     def test_backend_name(self):
         """Test backend_name property."""

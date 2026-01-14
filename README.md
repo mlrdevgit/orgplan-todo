@@ -26,12 +26,31 @@ git clone https://github.com/mlrdevgit/orgplan-todo.git
 cd orgplan-todo
 ```
 
-2. Install dependencies:
+2. Clone `orgplan` core library (required dependency):
+```bash
+# Clone into a parallel directory or adjusting path as needed
+git clone https://github.com/mlrdevgit/orgplan.git ../orgplan
+```
+
+3. Configure Environment:
+You must ensure `orgplan` is in your Python path.
+
+**Linux/macOS:**
+```bash
+export PYTHONPATH=$PYTHONPATH:../orgplan
+```
+
+**Windows (PowerShell):**
+```powershell
+$env:PYTHONPATH="$env:PYTHONPATH;..\orgplan"
+```
+
+4. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Set up configuration:
+5. Set up configuration:
 ```bash
 cp .env.example .env
 # Edit .env with your backend credentials (Microsoft or Google)
@@ -89,6 +108,7 @@ Configuration can be provided via (in order of precedence):
 1. Command-line arguments
 2. Environment variables
 3. `.env` file
+4. `orgplan` core configuration (via `ORGPLAN_CONFIG` or default locations)
 
 #### Common Options
 
