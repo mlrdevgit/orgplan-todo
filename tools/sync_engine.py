@@ -251,7 +251,7 @@ class SyncEngine:
         Returns:
             Backend status (active, completed)
         """
-        if status in ["DONE", "DELEGATED"]:
+        if status in ["DONE", "DELEGATED", "CANCELED"]:
             return "completed"
         else:
             return "active"

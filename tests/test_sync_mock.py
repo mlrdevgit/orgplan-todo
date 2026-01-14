@@ -71,5 +71,33 @@ class TestSyncEngineMock(unittest.TestCase):
         self.parser.add_task.assert_called_once()
         self.parser.add_detail_section.assert_called_once()
 
+    def test_sync_canceled_task(self):
+        """Test that [CANCELED] task treats backend as completed (regression test)."""
+        # Setup orgplan task CANCELED
+        task = OrgplanTask(
+            description="Canceled Task",
+            status="CANCELED",
+            priority=None,
+            line_number=1
+        )
+        setattr(task, "ms_todo_id", "task-123")  # Explicitly set ID
+        
+        self.parser.parse_tasks.return_value = [task]
+
+        # Setup backend task COMPLETED
+        backend_task = TaskItem(
+            id="task-123", 
+            title="Canceled Task", 
+            status="completed", 
+            importance="normal"
+        )
+        self.backend.get_tasks.return_value = [backend_task]
+
+        # Run sync
+        self.engine.sync_orgplan_to_todo()
+
+        # Verify NO update
+        self.backend.update_task.assert_not_called()
+
 if __name__ == "__main__":
     unittest.main()
