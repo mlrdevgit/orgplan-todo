@@ -22,7 +22,9 @@ import shutil
 sys.path.insert(0, str(Path(__file__).parent.parent / "tools"))
 
 from backends.google_tasks import GoogleTasksBackend
+from errors import AuthenticationError
 from backends.base import TaskItem
+from google.auth.exceptions import RefreshError
 
 
 class TestGoogleTasksBackend(unittest.TestCase):
@@ -106,13 +108,58 @@ class TestGoogleTasksBackend(unittest.TestCase):
         # Verify refresh was called
         mock_creds.refresh.assert_called_once()
 
+    @patch("backends.google_tasks.build")
+    def test_authenticate_invalid_grant_no_prompt(self, mock_build):
+        """Test authentication error when refresh token is revoked and prompt disabled."""
+        mock_creds = Mock()
+        mock_creds.valid = False
+        mock_creds.expired = True
+        mock_creds.refresh_token = "refresh_token"
+        mock_creds.refresh = Mock(side_effect=RefreshError("invalid_grant: Token revoked"))
+
+        with patch.object(self.backend, "_load_credentials", return_value=mock_creds):
+            with self.assertRaises(AuthenticationError) as ctx:
+                self.backend.authenticate()
+
+        self.assertIn("expired or revoked", str(ctx.exception))
+        mock_build.assert_not_called()
+
+    @patch("backends.google_tasks.build")
+    def test_execute_with_reauth_retries_on_invalid_grant(self, mock_build):
+        """Test re-authentication path retries a failed API call."""
+        backend = GoogleTasksBackend(
+            client_id=self.client_id,
+            client_secret=self.client_secret,
+            token_storage_path=Path(self.test_dir),
+            allow_prompt=True,
+        )
+        backend.logger = Mock()
+        backend.credentials = Mock()
+
+        call_state = {"count": 0}
+
+        def _call():
+            call_state["count"] += 1
+            if call_state["count"] == 1:
+                raise RefreshError("invalid_grant: Token revoked")
+            return "ok"
+
+        with patch.object(backend, "_interactive_login") as mock_login:
+            mock_build.return_value = Mock()
+            result = backend._execute_with_reauth(_call)
+
+        self.assertEqual(result, "ok")
+        self.assertEqual(call_state["count"], 2)
+        mock_login.assert_called_once()
+        mock_build.assert_called_once()
+
     def test_authenticate_requires_prompt_when_no_tokens(self):
         """Test that authentication fails when prompt disabled and no tokens."""
         with patch.object(Path, "exists", return_value=False):
-            with self.assertRaises(Exception) as ctx:
+            with self.assertRaises(AuthenticationError) as ctx:
                 self.backend.authenticate()
 
-            self.assertIn("Authentication required", str(ctx.exception))
+            self.assertIn("Google authentication required", str(ctx.exception))
             self.assertIn("--no-prompt", str(ctx.exception))
 
     @patch.object(GoogleTasksBackend, "service")

@@ -38,6 +38,12 @@ class NetworkError(APIError):
     pass
 
 
+class AuthenticationError(SyncError):
+    """Raised when authentication fails."""
+
+    pass
+
+
 def retry_on_failure(
     func: Callable[..., T],
     max_retries: int = 3,
@@ -68,6 +74,8 @@ def retry_on_failure(
             return func()
         except Exception as e:
             last_exception = e
+            if isinstance(e, (AuthenticationError, ConfigurationError)):
+                raise
 
             if attempt < max_retries:
                 if logger:

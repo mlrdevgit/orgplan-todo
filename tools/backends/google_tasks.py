@@ -10,11 +10,12 @@ import os
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
+from google.auth.exceptions import RefreshError
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from .base import TaskBackend, TaskItem
-from errors import retry_on_failure, APIError, NetworkError
+from errors import retry_on_failure, APIError, NetworkError, AuthenticationError
 
 
 class GoogleTasksBackend(TaskBackend):
@@ -85,6 +86,10 @@ class GoogleTasksBackend(TaskBackend):
                     self.credentials.refresh(Request())
                     self._save_credentials()
                     self.logger.info("Successfully refreshed access token")
+                except RefreshError as e:
+                    if not self._handle_refresh_error(e):
+                        self.logger.warning(f"Failed to refresh token: {e}")
+                        self.credentials = None
                 except Exception as e:
                     self.logger.warning(f"Failed to refresh token: {e}")
                     self.credentials = None
@@ -92,9 +97,10 @@ class GoogleTasksBackend(TaskBackend):
             if not self.credentials:
                 # Interactive login required
                 if not self.allow_prompt:
-                    raise Exception(
-                        "Authentication required but interactive prompt is disabled (--no-prompt). "
-                        "Run sync manually without --no-prompt to authenticate."
+                    raise AuthenticationError(
+                        "Google authentication required but interactive prompt is disabled (--no-prompt). "
+                        "Run sync manually without --no-prompt to authenticate, "
+                        f"or delete {self.token_path} and re-run."
                     )
 
                 self.logger.info("Starting interactive authentication...")
@@ -103,6 +109,31 @@ class GoogleTasksBackend(TaskBackend):
         # Build the service
         self.service = build("tasks", "v1", credentials=self.credentials)
         self.logger.info("Authenticated with Google Tasks API")
+
+    def _handle_refresh_error(self, error: RefreshError) -> bool:
+        """Handle refresh errors and optionally re-authenticate."""
+        if "invalid_grant" not in str(error):
+            return False
+
+        if not self.allow_prompt:
+            raise AuthenticationError(
+                "Google OAuth token is expired or revoked. Run sync without --no-prompt to re-authenticate, "
+                f"or delete {self.token_path} and re-run."
+            )
+
+        self.logger.warning("Google OAuth token expired or revoked; re-authentication required")
+        self._interactive_login()
+        return True
+
+    def _execute_with_reauth(self, func):
+        """Execute a Google API call and re-authenticate on invalid_grant."""
+        try:
+            return func()
+        except RefreshError as e:
+            if self._handle_refresh_error(e):
+                self.service = build("tasks", "v1", credentials=self.credentials)
+                return func()
+            raise
 
     def _load_credentials(self) -> Optional[Credentials]:
         """Load credentials from token file.
@@ -206,26 +237,29 @@ class GoogleTasksBackend(TaskBackend):
 
         def _get_lists():
             try:
-                all_lists = []
-                page_token = None
+                def _call():
+                    all_lists = []
+                    page_token = None
 
-                # Paginate through all results
-                while True:
-                    request = self.service.tasklists().list(
-                        maxResults=100, pageToken=page_token
-                    )
-                    results = request.execute()
+                    # Paginate through all results
+                    while True:
+                        request = self.service.tasklists().list(
+                            maxResults=100, pageToken=page_token
+                        )
+                        results = request.execute()
 
-                    # Add lists from this page
-                    lists = results.get("items", [])
-                    all_lists.extend(lists)
+                        # Add lists from this page
+                        lists = results.get("items", [])
+                        all_lists.extend(lists)
 
-                    # Check if there are more pages
-                    page_token = results.get("nextPageToken")
-                    if not page_token:
-                        break
+                        # Check if there are more pages
+                        page_token = results.get("nextPageToken")
+                        if not page_token:
+                            break
 
-                return all_lists
+                    return all_lists
+
+                return self._execute_with_reauth(_call)
             except HttpError as e:
                 raise self._handle_api_error(e)
 
@@ -258,32 +292,35 @@ class GoogleTasksBackend(TaskBackend):
 
         def _get_tasks():
             try:
-                all_tasks = []
-                page_token = None
+                def _call():
+                    all_tasks = []
+                    page_token = None
 
-                # Paginate through all results
-                while True:
-                    # Request with pagination
-                    request = self.service.tasks().list(
-                        tasklist=list_id,
-                        showCompleted=True,
-                        showHidden=True,
-                        maxResults=100,  # Maximum allowed per page
-                        pageToken=page_token,
-                    )
-                    results = request.execute()
+                    # Paginate through all results
+                    while True:
+                        # Request with pagination
+                        request = self.service.tasks().list(
+                            tasklist=list_id,
+                            showCompleted=True,
+                            showHidden=True,
+                            maxResults=100,  # Maximum allowed per page
+                            pageToken=page_token,
+                        )
+                        results = request.execute()
 
-                    # Add tasks from this page
-                    tasks = results.get("items", [])
-                    all_tasks.extend(tasks)
+                        # Add tasks from this page
+                        tasks = results.get("items", [])
+                        all_tasks.extend(tasks)
 
-                    # Check if there are more pages
-                    page_token = results.get("nextPageToken")
-                    if not page_token:
-                        break  # No more pages
+                        # Check if there are more pages
+                        page_token = results.get("nextPageToken")
+                        if not page_token:
+                            break  # No more pages
 
-                # Convert all tasks to TaskItem objects
-                return [self._api_to_task_item(task) for task in all_tasks]
+                    # Convert all tasks to TaskItem objects
+                    return [self._api_to_task_item(task) for task in all_tasks]
+
+                return self._execute_with_reauth(_call)
             except HttpError as e:
                 raise self._handle_api_error(e)
 
@@ -302,20 +339,25 @@ class GoogleTasksBackend(TaskBackend):
 
         def _create_task():
             try:
-                # Build Google Tasks task object
-                task_body = {
-                    "title": task.title,
-                    "status": "completed" if task.status == "completed" else "needsAction",
-                }
+                def _call():
+                    # Build Google Tasks task object
+                    task_body = {
+                        "title": task.title,
+                        "status": "completed" if task.status == "completed" else "needsAction",
+                    }
 
-                if task.body:
-                    task_body["notes"] = task.body
-                if task.due_date:
-                    task_body["due"] = self._format_due_date(task.due_date)
+                    if task.body:
+                        task_body["notes"] = task.body
+                    if task.due_date:
+                        task_body["due"] = self._format_due_date(task.due_date)
 
-                result = self.service.tasks().insert(tasklist=list_id, body=task_body).execute()
+                    result = (
+                        self.service.tasks().insert(tasklist=list_id, body=task_body).execute()
+                    )
 
-                return self._api_to_task_item(result)
+                    return self._api_to_task_item(result)
+
+                return self._execute_with_reauth(_call)
             except HttpError as e:
                 raise self._handle_api_error(e)
 
@@ -334,25 +376,28 @@ class GoogleTasksBackend(TaskBackend):
 
         def _update_task():
             try:
-                # Build Google Tasks task object
-                task_body = {
-                    "id": task.id,
-                    "title": task.title,
-                    "status": "completed" if task.status == "completed" else "needsAction",
-                }
+                def _call():
+                    # Build Google Tasks task object
+                    task_body = {
+                        "id": task.id,
+                        "title": task.title,
+                        "status": "completed" if task.status == "completed" else "needsAction",
+                    }
 
-                if task.body is not None:
-                    task_body["notes"] = task.body
-                if task.due_date:
-                    task_body["due"] = self._format_due_date(task.due_date)
+                    if task.body is not None:
+                        task_body["notes"] = task.body
+                    if task.due_date:
+                        task_body["due"] = self._format_due_date(task.due_date)
 
-                result = (
-                    self.service.tasks()
-                    .update(tasklist=list_id, task=task.id, body=task_body)
-                    .execute()
-                )
+                    result = (
+                        self.service.tasks()
+                        .update(tasklist=list_id, task=task.id, body=task_body)
+                        .execute()
+                    )
 
-                return self._api_to_task_item(result)
+                    return self._api_to_task_item(result)
+
+                return self._execute_with_reauth(_call)
             except HttpError as e:
                 raise self._handle_api_error(e)
 
@@ -368,7 +413,10 @@ class GoogleTasksBackend(TaskBackend):
 
         def _delete_task():
             try:
-                self.service.tasks().delete(tasklist=list_id, task=task_id).execute()
+                def _call():
+                    self.service.tasks().delete(tasklist=list_id, task=task_id).execute()
+
+                return self._execute_with_reauth(_call)
             except HttpError as e:
                 raise self._handle_api_error(e)
 

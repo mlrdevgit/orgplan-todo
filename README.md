@@ -198,6 +198,31 @@ python tools/sync.py --todo-list "Orgplan 2025" --auth-mode delegated --no-promp
 python tools/sync.py --backend google --no-prompt --log-file sync.log
 ```
 
+## Testing
+
+Use the repo venv if available and add both this repo and the orgplan core library to
+`PYTHONPATH` so tests can import modules consistently.
+
+```bash
+# Canonical layout: orgplan-todo/ next to orgplan/
+# Run from the orgplan-todo repo root
+export PYTHONPATH=".:./tools:../orgplan"
+
+# Create venv and install deps (Google client libs included)
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+
+# Run the full test set used in development
+python -m unittest \
+  test_bidirectional.py test_parse.py test_phase3.py test_phase4.py \
+  tests/test_google_tasks.py tests/test_multi_backend.py tests/test_orgplan_due.py \
+  tests/test_orgplan_integration.py tests/test_sync_direction.py tests/test_sync_mock.py
+
+# Or use discovery once PYTHONPATH is set
+python -m unittest discover -s tests
+```
+
 ### Override Configuration
 
 ```bash
