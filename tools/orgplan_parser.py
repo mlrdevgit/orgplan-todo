@@ -1,5 +1,8 @@
 """Parser for orgplan markdown files."""
 
+from __future__ import annotations
+
+import datetime
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -7,9 +10,11 @@ from typing import Optional
 
 try:
     from orgplan.markup import parse_title_parts
+    from orgplan.markup import _parse_timestamps as orgplan_parse_timestamps
 except ImportError:
     # Fallback if orgplan not installed/found
     parse_title_parts = None
+    orgplan_parse_timestamps = None
 
 
 @dataclass
@@ -19,6 +24,9 @@ class OrgplanTask:
     description: str  # Task description without status/tags
     status: Optional[str] = None  # DONE, PENDING, DELEGATED, or None
     priority: Optional[int] = None  # 1, 2, 3, etc. from #p1, #p2, #p3
+    due_date: Optional[datetime.date] = None
+    due_marker_style: Optional[str] = None  # "deadline", "scheduled", "plain"
+    detail_has_deadline_marker: bool = False
     raw_line: str = ""  # Original line from TODO list
     detail_section: str = ""  # Content of the detail section
     # Backend-specific task IDs
@@ -37,6 +45,15 @@ class OrgplanParser:
     BLOCKED_PATTERN = re.compile(r"#blocked")
     # Custom tags pattern - matches any remaining hashtags (e.g., #uma, #tag, #custom)
     CUSTOM_TAG_PATTERN = re.compile(r"#\w+")
+    # Timestamp patterns
+    TIMESTAMP_PATTERN = re.compile(
+        r"<(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})"
+        r"(?:\s+\w+)?"
+        r"(?:\s+(?P<hour>\d{2}):(?P<minute>\d{2}))?"
+        r">"
+    )
+    DEADLINE_PATTERN = re.compile(r"DEADLINE:\s*(<\d{4}-\d{2}-\d{2}[^>]*>)")
+    SCHEDULED_PATTERN = re.compile(r"SCHEDULED:\s*(<\d{4}-\d{2}-\d{2}[^>]*>)")
     # Backend ID patterns
     MS_TODO_ID_PATTERN = re.compile(r"<!--\s*ms-todo-id:\s*([^\s]+)\s*-->")
     GOOGLE_TASKS_ID_PATTERN = re.compile(r"<!--\s*google-tasks-id:\s*([^\s]+)\s*-->")
@@ -146,6 +163,7 @@ class OrgplanParser:
         """
         # Remove leading "- "
         content = line.strip()[2:]
+        due_date, due_marker_style = self._extract_due_from_text(content)
 
         if parse_title_parts:
             # Use orgplan parsing logic
@@ -169,7 +187,7 @@ class OrgplanParser:
                     priority = int(tag[1:])
                     break
             
-            description = title
+            description = self._strip_due_markers(title)
         else:
             # Legacy regex parsing (fallback)
             
@@ -189,6 +207,7 @@ class OrgplanParser:
             description = self.BLOCKED_PATTERN.sub("", description)
             # Remove any remaining custom tags (e.g., #uma, #tag, #custom)
             description = self.CUSTOM_TAG_PATTERN.sub("", description)
+            description = self._strip_due_markers(description)
             description = description.strip()
 
         if not description:
@@ -198,6 +217,8 @@ class OrgplanParser:
             description=description,
             status=status,
             priority=priority,
+            due_date=due_date,
+            due_marker_style=due_marker_style,
             raw_line=line,
             line_number=line_number,
         )
@@ -235,6 +256,13 @@ class OrgplanParser:
             if google_id_match:
                 task.google_tasks_id = google_id_match.group(1)
 
+            # Extract due dates from detail section if not already set on task line
+            deadlines, scheduled, timestamps = self._parse_timestamps(task.detail_section)
+            task.detail_has_deadline_marker = bool(deadlines or scheduled)
+
+            if task.due_date is None:
+                task.due_date = self._select_due_date(deadlines, scheduled, timestamps)
+
     def update_task_status(self, task: OrgplanTask, new_status: Optional[str]):
         """Update task status in the orgplan file.
 
@@ -250,20 +278,8 @@ class OrgplanParser:
         if line_idx >= len(self.lines):
             return
 
-        old_line = self.lines[line_idx]
-
-        # Remove existing status
-        new_line = self.STATUS_PATTERN.sub("", old_line).strip()
-
-        # Add new status if provided
-        if new_status:
-            # Insert status after "- "
-            new_line = f"- [{new_status}] {new_line[2:]}"
-        else:
-            # Ensure it still starts with "- "
-            if not new_line.startswith("- "):
-                new_line = "- " + new_line
-
+        task.status = new_status
+        new_line = self._format_task_line(task)
         self.lines[line_idx] = new_line
         task.raw_line = new_line
 
@@ -281,21 +297,10 @@ class OrgplanParser:
         if line_idx >= len(self.lines):
             return
 
-        # Preserve status and tags, update description
-        parts = ["- "]
-
-        if task.status:
-            parts.append(f"[{task.status}] ")
-
-        if task.priority:
-            parts.append(f"#p{task.priority} ")
-
-        parts.append(new_description)
-
-        new_line = "".join(parts)
+        task.description = new_description
+        new_line = self._format_task_line(task)
         self.lines[line_idx] = new_line
         task.raw_line = new_line
-        task.description = new_description
 
     def update_task_priority(self, task: OrgplanTask, new_priority: Optional[int]):
         """Update task priority in the orgplan file.
@@ -311,27 +316,42 @@ class OrgplanParser:
         if line_idx >= len(self.lines):
             return
 
-        old_line = self.lines[line_idx]
-
-        # Remove existing priority
-        new_line = self.PRIORITY_PATTERN.sub("", old_line).strip()
-
-        # Add new priority if provided
-        if new_priority:
-            # Insert after status if present, otherwise after "- "
-            status_match = self.STATUS_PATTERN.search(new_line)
-            if status_match:
-                insert_pos = status_match.end()
-                new_line = new_line[:insert_pos] + f" #p{new_priority}" + new_line[insert_pos:]
-            else:
-                new_line = f"- #p{new_priority} {new_line[2:]}"
-
-        self.lines[line_idx] = new_line.strip()
-        task.raw_line = self.lines[line_idx]
         task.priority = new_priority
+        new_line = self._format_task_line(task)
+        self.lines[line_idx] = new_line
+        task.raw_line = new_line
+
+    def update_task_due_date(
+        self, task: OrgplanTask, new_due_date: Optional[datetime.date], due_marker_style: str
+    ):
+        """Update task due date marker in the orgplan file.
+
+        Args:
+            task: Task to update
+            new_due_date: New due date or None
+            due_marker_style: Marker style to use ("deadline", "scheduled", "plain")
+        """
+        if not self.lines:
+            self.load()
+
+        line_idx = task.line_number - 1
+        if line_idx >= len(self.lines):
+            return
+
+        task.due_date = new_due_date
+        task.due_marker_style = due_marker_style if new_due_date else None
+
+        new_line = self._format_task_line(task)
+        self.lines[line_idx] = new_line
+        task.raw_line = new_line
 
     def add_task(
-        self, description: str, status: Optional[str] = None, priority: Optional[int] = None
+        self,
+        description: str,
+        status: Optional[str] = None,
+        priority: Optional[int] = None,
+        due_date: Optional[datetime.date] = None,
+        due_marker_style: Optional[str] = None,
     ) -> OrgplanTask:
         """Add a new task to the TODO list section.
 
@@ -346,17 +366,14 @@ class OrgplanParser:
         if not self.lines:
             self.load()
 
-        # Build task line
-        parts = ["- "]
-
-        if status:
-            parts.append(f"[{status}] ")
-
-        if priority:
-            parts.append(f"#p{priority} ")
-
-        parts.append(description)
-        task_line = "".join(parts)
+        task = OrgplanTask(
+            description=description,
+            status=status,
+            priority=priority,
+            due_date=due_date,
+            due_marker_style=due_marker_style,
+        )
+        task_line = self._format_task_line(task)
 
         # Find TODO List section and insert
         todo_section_end = 0
@@ -372,13 +389,8 @@ class OrgplanParser:
         # Insert the new task
         self.lines.insert(todo_section_end, task_line)
 
-        task = OrgplanTask(
-            description=description,
-            status=status,
-            priority=priority,
-            raw_line=task_line,
-            line_number=todo_section_end + 1,
-        )
+        task.raw_line = task_line
+        task.line_number = todo_section_end + 1
 
         return task
 
@@ -452,6 +464,119 @@ class OrgplanParser:
 
                 self.lines.insert(insert_pos, id_marker)
                 setattr(task, id_name, id_value)
+
+    def _parse_timestamps(
+        self, text: str
+    ) -> tuple[list[datetime.date | datetime.datetime], list[datetime.date | datetime.datetime], list[datetime.date | datetime.datetime]]:
+        if orgplan_parse_timestamps:
+            return orgplan_parse_timestamps(text)
+
+        deadlines = []
+        scheduled_list = []
+        timestamps = []
+        prefixed_starts = set()
+
+        for match in re.finditer(r"DEADLINE:\s*(<\d{4}-\d{2}-\d{2}[^>]*>)", text):
+            ts_match = self.TIMESTAMP_PATTERN.search(match.group(0))
+            if ts_match:
+                dt = self._extract_datetime(ts_match)
+                if dt:
+                    deadlines.append(dt)
+                    prefixed_starts.add(match.start() + ts_match.start())
+
+        for match in re.finditer(r"SCHEDULED:\s*(<\d{4}-\d{2}-\d{2}[^>]*>)", text):
+            ts_match = self.TIMESTAMP_PATTERN.search(match.group(0))
+            if ts_match:
+                dt = self._extract_datetime(ts_match)
+                if dt:
+                    scheduled_list.append(dt)
+                    prefixed_starts.add(match.start() + ts_match.start())
+
+        for match in self.TIMESTAMP_PATTERN.finditer(text):
+            if match.start() in prefixed_starts:
+                continue
+            dt = self._extract_datetime(match)
+            if dt:
+                timestamps.append(dt)
+
+        return deadlines, scheduled_list, timestamps
+
+    def _extract_datetime(self, match) -> Optional[datetime.date | datetime.datetime]:
+        try:
+            year = int(match.group("year"))
+            month = int(match.group("month"))
+            day = int(match.group("day"))
+            hour = match.group("hour")
+            minute = match.group("minute")
+
+            if hour and minute:
+                return datetime.datetime(year, month, day, int(hour), int(minute))
+            return datetime.date(year, month, day)
+        except (ValueError, AttributeError):
+            return None
+
+    def _select_due_date(
+        self,
+        deadlines: list[datetime.date | datetime.datetime],
+        scheduled: list[datetime.date | datetime.datetime],
+        timestamps: list[datetime.date | datetime.datetime],
+    ) -> Optional[datetime.date]:
+        if deadlines:
+            return self._coerce_date(deadlines[0])
+        if scheduled:
+            return self._coerce_date(scheduled[0])
+        if timestamps:
+            return self._coerce_date(timestamps[0])
+        return None
+
+    def _coerce_date(self, value: datetime.date | datetime.datetime) -> datetime.date:
+        if isinstance(value, datetime.datetime):
+            return value.date()
+        return value
+
+    def _extract_due_from_text(
+        self, text: str
+    ) -> tuple[Optional[datetime.date], Optional[str]]:
+        deadlines, scheduled, timestamps = self._parse_timestamps(text)
+        due_date = self._select_due_date(deadlines, scheduled, timestamps)
+
+        due_marker_style = None
+        if self.DEADLINE_PATTERN.search(text):
+            due_marker_style = "deadline"
+        elif self.SCHEDULED_PATTERN.search(text):
+            due_marker_style = "scheduled"
+        elif self.TIMESTAMP_PATTERN.search(text):
+            due_marker_style = "plain"
+
+        return due_date, due_marker_style
+
+    def _strip_due_markers(self, text: str) -> str:
+        text = self.DEADLINE_PATTERN.sub("", text)
+        text = self.SCHEDULED_PATTERN.sub("", text)
+        text = self.TIMESTAMP_PATTERN.sub("", text)
+        return " ".join(text.split()).strip()
+
+    def _format_task_line(self, task: OrgplanTask) -> str:
+        parts = ["- "]
+
+        if task.status:
+            parts.append(f"[{task.status}] ")
+
+        if task.priority:
+            parts.append(f"#p{task.priority} ")
+
+        parts.append(task.description)
+
+        if task.due_date and task.due_marker_style:
+            due_text = task.due_date.isoformat()
+            if task.due_marker_style == "deadline":
+                parts.append(f" DEADLINE: <{due_text}>")
+            elif task.due_marker_style == "scheduled":
+                parts.append(f" SCHEDULED: <{due_text}>")
+            else:
+                parts.append(f" <{due_text}>")
+
+        return "".join(parts).strip()
 
     def save(self):
         """Save changes back to the orgplan file."""

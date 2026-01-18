@@ -2,6 +2,7 @@
 
 import json
 import logging
+from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
 import os
@@ -309,6 +310,8 @@ class GoogleTasksBackend(TaskBackend):
 
                 if task.body:
                     task_body["notes"] = task.body
+                if task.due_date:
+                    task_body["due"] = self._format_due_date(task.due_date)
 
                 result = self.service.tasks().insert(tasklist=list_id, body=task_body).execute()
 
@@ -340,6 +343,8 @@ class GoogleTasksBackend(TaskBackend):
 
                 if task.body is not None:
                     task_body["notes"] = task.body
+                if task.due_date:
+                    task_body["due"] = self._format_due_date(task.due_date)
 
                 result = (
                     self.service.tasks()
@@ -390,4 +395,21 @@ class GoogleTasksBackend(TaskBackend):
             importance=None,  # Google Tasks doesn't support priority
             body=api_task.get("notes"),
             completed_datetime=api_task.get("completed"),
+            due_date=self._parse_due_date(api_task.get("due")),
         )
+
+    def _parse_due_date(self, due_value: Optional[str]) -> Optional[date]:
+        if not due_value:
+            return None
+
+        try:
+            if due_value.endswith("Z"):
+                due_value = due_value[:-1] + "+00:00"
+            if "T" in due_value:
+                return datetime.fromisoformat(due_value).date()
+            return date.fromisoformat(due_value)
+        except ValueError:
+            return None
+
+    def _format_due_date(self, due_date: date) -> str:
+        return f"{due_date.isoformat()}T00:00:00.000Z"

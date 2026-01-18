@@ -10,6 +10,7 @@ This test file covers:
 
 import os
 import sys
+import datetime
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, MagicMock, patch, mock_open
@@ -169,6 +170,7 @@ class TestGoogleTasksBackend(unittest.TestCase):
                 "title": "Task 1",
                 "status": "needsAction",
                 "notes": "Task notes",
+                "due": "2025-01-15T00:00:00.000Z",
             },
             {
                 "id": "task2",
@@ -191,6 +193,7 @@ class TestGoogleTasksBackend(unittest.TestCase):
         self.assertEqual(result[0].title, "Task 1")
         self.assertEqual(result[0].status, "active")
         self.assertEqual(result[0].importance, None)  # Google doesn't support priority
+        self.assertEqual(result[0].due_date, datetime.date(2025, 1, 15))
         self.assertEqual(result[1].status, "completed")
 
     @patch.object(GoogleTasksBackend, "service")
@@ -203,6 +206,7 @@ class TestGoogleTasksBackend(unittest.TestCase):
             status="active",
             importance=None,
             body="Task description",
+            due_date=datetime.date(2025, 1, 20),
         )
 
         # Mock API response
@@ -230,6 +234,7 @@ class TestGoogleTasksBackend(unittest.TestCase):
         self.assertEqual(call_args[1]["tasklist"], "list1")
         self.assertEqual(call_args[1]["body"]["title"], "New Task")
         self.assertEqual(call_args[1]["body"]["status"], "needsAction")
+        self.assertEqual(call_args[1]["body"]["due"], "2025-01-20T00:00:00.000Z")
 
     @patch.object(GoogleTasksBackend, "service")
     def test_create_completed_task(self, mock_service):
@@ -265,6 +270,7 @@ class TestGoogleTasksBackend(unittest.TestCase):
             status="completed",
             importance=None,
             body="Updated notes",
+            due_date=datetime.date(2025, 2, 1),
         )
 
         mock_updated = {
@@ -288,6 +294,7 @@ class TestGoogleTasksBackend(unittest.TestCase):
         call_args = mock_service.tasks().update.call_args
         self.assertEqual(call_args[1]["tasklist"], "list1")
         self.assertEqual(call_args[1]["task"], "task_id")
+        self.assertEqual(call_args[1]["body"]["due"], "2025-02-01T00:00:00.000Z")
 
     @patch.object(GoogleTasksBackend, "service")
     def test_delete_task(self, mock_service):
@@ -310,6 +317,7 @@ class TestGoogleTasksBackend(unittest.TestCase):
             "title": "Test Task",
             "status": "needsAction",
             "notes": "Task notes",
+            "due": "2025-03-01T00:00:00.000Z",
         }
 
         result = self.backend._api_to_task_item(api_task)
@@ -319,6 +327,7 @@ class TestGoogleTasksBackend(unittest.TestCase):
         self.assertEqual(result.status, "active")
         self.assertEqual(result.body, "Task notes")
         self.assertIsNone(result.importance)  # Google doesn't support
+        self.assertEqual(result.due_date, datetime.date(2025, 3, 1))
 
     def test_api_to_task_item_completed(self):
         """Test converting Google API task to TaskItem (completed task)."""

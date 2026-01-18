@@ -1,6 +1,6 @@
 """Microsoft To Do backend implementation using Graph API."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 from pathlib import Path
 import logging
@@ -274,6 +274,11 @@ class MicrosoftTodoBackend(TaskBackend):
 
         if task.body:
             task_data["body"] = {"contentType": "text", "content": task.body}
+        if task.due_date:
+            task_data["dueDateTime"] = {
+                "dateTime": f"{task.due_date.isoformat()}T00:00:00",
+                "timeZone": "UTC",
+            }
 
         result = self._make_request("POST", f"/me/todo/lists/{list_id}/tasks", task_data)
         return self._api_to_task_item(result)
@@ -295,6 +300,11 @@ class MicrosoftTodoBackend(TaskBackend):
 
         if task.body is not None:
             task_data["body"] = {"contentType": "text", "content": task.body}
+        if task.due_date:
+            task_data["dueDateTime"] = {
+                "dateTime": f"{task.due_date.isoformat()}T00:00:00",
+                "timeZone": "UTC",
+            }
 
         result = self._make_request("PATCH", f"/me/todo/lists/{list_id}/tasks/{task.id}", task_data)
         return self._api_to_task_item(result)
@@ -323,4 +333,18 @@ class MicrosoftTodoBackend(TaskBackend):
             importance=api_task.get("importance", "normal"),
             body=api_task.get("body", {}).get("content"),
             completed_datetime=api_task.get("completedDateTime", {}).get("dateTime"),
+            due_date=self._parse_due_date(api_task.get("dueDateTime", {}).get("dateTime")),
         )
+
+    def _parse_due_date(self, due_value: Optional[str]) -> Optional[date]:
+        if not due_value:
+            return None
+
+        try:
+            if due_value.endswith("Z"):
+                due_value = due_value[:-1] + "+00:00"
+            if "T" in due_value:
+                return datetime.fromisoformat(due_value).date()
+            return date.fromisoformat(due_value)
+        except ValueError:
+            return None

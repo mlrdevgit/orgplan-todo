@@ -14,6 +14,7 @@ Synchronize tasks between your orgplan productivity system and Microsoft To Do o
 - **Priority mapping** for Microsoft To Do (#p1 ↔ High, #p2 ↔ Normal, #p3+ ↔ Low)
 - **New task creation** from either system
 - **Detail section sync** with orgplan taking precedence
+- **Due date sync** using orgplan timestamp markers (e.g., `DEADLINE: <YYYY-MM-DD>`, `SCHEDULED: <YYYY-MM-DD>`, or `<YYYY-MM-DD>`)
 - **Automated sync** with file locking and cron support
 - **Dry-run mode** to preview changes before applying
 - **Flexible configuration** via CLI, environment variables, or .env file
@@ -247,13 +248,14 @@ Each monthly file starts with a `# TODO List` section:
 ### Task Format
 
 ```
-- [STATUS] #priority Task description
+- [STATUS] #priority Task description DEADLINE: <YYYY-MM-DD>
 ```
 
 - **Status**: `[DONE]`, `[PENDING]`, `[DELEGATED]` (optional)
 - **Priority**: `#p1`, `#p2`, `#p3`, etc. (optional)
 - **Time estimates**: `#1h`, `#2h`, `#1d` (ignored by sync)
 - **#blocked**: Indicates blocked task (ignored by sync)
+- **Due dates**: Use `DEADLINE: <YYYY-MM-DD>`, `SCHEDULED: <YYYY-MM-DD>`, or a plain `<YYYY-MM-DD>` timestamp
 
 ## Sync Behavior (Bidirectional)
 
@@ -264,6 +266,7 @@ Each monthly file starts with a `# TODO List` section:
 - Priority changes → Update importance (Microsoft only)
 - Title changes → Update task title
 - `[DONE]` or `[DELEGATED]` → Mark completed in backend
+- Due dates → Synced to backend due dates
 - Tasks with existing backend ID markers are matched by ID
 - Tasks without ID are matched by title
 
@@ -272,6 +275,7 @@ Each monthly file starts with a `# TODO List` section:
 - New tasks in backend → Created in orgplan TODO list
 - Task completed in backend → Mark `[DONE]` in orgplan
 - Title changes → Update task description
+- Due dates → Appended as `<YYYY-MM-DD>` in the task title (unless the detail section already has `DEADLINE:`/`SCHEDULED:` markers)
 - **Microsoft only**: Importance changes → Update priority tags
   - `high` → `#p1`
   - `normal` → `#p2`

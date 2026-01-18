@@ -141,6 +141,7 @@ class SyncEngine:
                 status="active",
                 importance=importance,
                 body=None,
+                due_date=orgplan_task.due_date,
             )
 
             created_task = self.backend.create_task(self.task_list_id, task_item)
@@ -187,6 +188,11 @@ class SyncEngine:
                 updates["importance"] = desired_importance
                 changes.append(f"importance: {todo_task.importance} -> {desired_importance}")
 
+        # Check due date (only if orgplan has one set)
+        if orgplan_task.due_date and orgplan_task.due_date != todo_task.due_date:
+            updates["due_date"] = orgplan_task.due_date
+            changes.append(f"due_date: {todo_task.due_date} -> {orgplan_task.due_date}")
+
         if not updates:
             self.logger.debug(f"Task '{orgplan_task.description}' is up to date")
             return False
@@ -207,6 +213,7 @@ class SyncEngine:
                 status=updates.get("status", todo_task.status),
                 importance=updates.get("importance", todo_task.importance),
                 body=todo_task.body,
+                due_date=updates.get("due_date", todo_task.due_date),
             )
 
             self.backend.update_task(self.task_list_id, updated_task)
@@ -377,6 +384,8 @@ class SyncEngine:
                 description=todo_task.title,
                 status=status,
                 priority=priority,
+                due_date=todo_task.due_date,
+                due_marker_style="plain" if todo_task.due_date else None,
             )
 
             # Add detail section with backend-specific ID
@@ -433,7 +442,17 @@ class SyncEngine:
                 changes.append(f"priority: {orgplan_task.priority} -> {desired_priority}")
                 if not self.dry_run:
                     self.orgplan_parser.update_task_priority(orgplan_task, desired_priority)
-                    modified = True
+                modified = True
+
+        # Check due date (prefer title marker unless detail already has a deadline marker)
+        if todo_task.due_date and todo_task.due_date != orgplan_task.due_date:
+            if not orgplan_task.detail_has_deadline_marker:
+                changes.append(f"due_date: {orgplan_task.due_date} -> {todo_task.due_date}")
+                if not self.dry_run:
+                    self.orgplan_parser.update_task_due_date(
+                        orgplan_task, todo_task.due_date, "plain"
+                    )
+                modified = True
 
         # Sync detail section body (only if orgplan detail section is empty)
         backend_id_attr = self.backend.id_marker_prefix.replace("-", "_")

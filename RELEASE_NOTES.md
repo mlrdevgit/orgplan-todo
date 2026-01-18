@@ -17,6 +17,7 @@ This release adds comprehensive Google Tasks backend support alongside the exist
 - **Token Management**: Secure token storage in `.tokens/google_tokens.json`
 - **Task Notes**: Sync task body/notes between systems
 - **Completion Status**: Bidirectional status sync (DONE ↔ Completed)
+- **Due Dates**: Bidirectional due date sync using orgplan timestamp markers (e.g., `DEADLINE: <YYYY-MM-DD>` or `<YYYY-MM-DD>`)
 
 ### Multi-Backend Architecture
 - **Pluggable Backend System**: Clean abstraction layer supporting multiple backends
@@ -117,7 +118,6 @@ See [BACKEND_MIGRATION.md](docs/BACKEND_MIGRATION.md) for detailed migration ins
 
 ### Google Tasks Limitations
 - **No priority support**: Priority tags (#p1, #p2, #p3) are ignored when using Google Tasks
-- **No due dates**: Google Tasks due dates are not currently synced (future enhancement)
 - **No subtasks**: Google Tasks subtasks are not currently synced (future enhancement)
 
 ### General
@@ -128,7 +128,6 @@ See [BACKEND_MIGRATION.md](docs/BACKEND_MIGRATION.md) for detailed migration ins
 ## 🔮 Future Enhancements
 
 ### Planned Features
-- Due date synchronization (both backends)
 - Subtasks/checklist items support
 - Additional backends (Todoist, Trello, Notion)
 - Real-time sync via webhooks

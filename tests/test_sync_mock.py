@@ -1,6 +1,7 @@
 
 """Tests for Sync Engine using Mocks."""
 
+import datetime
 import unittest
 from unittest.mock import Mock, MagicMock
 from tools.sync_engine import SyncEngine
@@ -32,6 +33,7 @@ class TestSyncEngineMock(unittest.TestCase):
             description="New Task",
             status=None,
             priority=1,
+            due_date=datetime.date(2025, 1, 15),
             line_number=1
         )
         self.parser.parse_tasks.return_value = [task]
@@ -40,7 +42,13 @@ class TestSyncEngineMock(unittest.TestCase):
         self.backend.get_tasks.return_value = []
         
         # Setup creation return
-        created_item = TaskItem(id="new_id", title="New Task", status="active", importance="high")
+        created_item = TaskItem(
+            id="new_id",
+            title="New Task",
+            status="active",
+            importance="high",
+            due_date=datetime.date(2025, 1, 15),
+        )
         self.backend.create_task.return_value = created_item
         
         # Run sync
@@ -55,6 +63,35 @@ class TestSyncEngineMock(unittest.TestCase):
         args, kwargs = self.parser.add_detail_section.call_args
         self.assertEqual(args[0], task)
         self.assertEqual(kwargs["ms_todo_id"], "new_id")
+
+    def test_sync_orgplan_to_todo_updates_due_date(self):
+        """Test updating due date in backend from orgplan."""
+        task = OrgplanTask(
+            description="Due Task",
+            status=None,
+            priority=None,
+            due_date=datetime.date(2025, 2, 1),
+            line_number=1,
+        )
+        setattr(task, "ms_todo_id", "task-123")
+
+        self.parser.parse_tasks.return_value = [task]
+
+        backend_task = TaskItem(
+            id="task-123",
+            title="Due Task",
+            status="active",
+            importance="normal",
+            due_date=None,
+        )
+        self.backend.get_tasks.return_value = [backend_task]
+
+        self.engine.sync_orgplan_to_todo()
+
+        self.backend.update_task.assert_called_once()
+        args, _ = self.backend.update_task.call_args
+        updated_task = args[1]
+        self.assertEqual(updated_task.due_date, datetime.date(2025, 2, 1))
 
     def test_sync_todo_to_orgplan_create(self):
         """Test creating a new task in orgplan from backend."""

@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 
@@ -20,6 +20,7 @@ class TaskItem:
     body: Optional[str] = None
     importance: Optional[str] = None  # "low", "normal", "high" (None for backends without priority)
     completed_datetime: Optional[str] = None
+    due_date: Optional[date] = None
     backend_specific: dict = field(default_factory=dict)  # For backend-specific fields
 
     @property
