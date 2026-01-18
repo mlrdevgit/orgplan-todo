@@ -62,6 +62,10 @@ Examples:
   # Dry run to preview changes
   python sync.py --todo-list "Orgplan 2025" --dry-run
 
+  # Sync one direction only
+  python sync.py --todo-list "Orgplan 2025" --sync-direction orgplan-to-remote
+  python sync.py --todo-list "Orgplan 2025" --sync-direction remote-to-orgplan
+
   # Sync specific month with logging
   python sync.py --todo-list "Work Tasks 2025" --month 2025-11 --log-file sync.log
 
@@ -151,6 +155,13 @@ Examples:
         "--validate-config",
         action="store_true",
         help="Validate configuration and exit (no sync)",
+    )
+    sync_group.add_argument(
+        "--sync-direction",
+        type=str,
+        choices=["both", "orgplan-to-remote", "remote-to-orgplan"],
+        default="both",
+        help="Sync direction: both (default), orgplan-to-remote, or remote-to-orgplan",
     )
 
     # Logging
@@ -290,12 +301,41 @@ def main():
             dry_run=config.dry_run,
         )
 
-        # Perform bidirectional sync
+        # Perform sync
         logger.info("=" * 60)
-        logger.info("Starting bidirectional sync")
+        if args.sync_direction == "orgplan-to-remote":
+            logger.info("Starting orgplan -> remote sync")
+        elif args.sync_direction == "remote-to-orgplan":
+            logger.info("Starting remote -> orgplan sync")
+        else:
+            logger.info("Starting bidirectional sync")
         logger.info("=" * 60)
 
-        stats = sync_engine.sync_bidirectional()
+        if args.sync_direction == "orgplan-to-remote":
+            stats_to_todo = sync_engine.sync_orgplan_to_todo()
+            stats = {
+                "orgplan_to_todo": stats_to_todo,
+                "todo_to_orgplan": {"created": 0, "updated": 0, "skipped": 0, "errors": 0},
+                "total_created": stats_to_todo["created"],
+                "total_updated": stats_to_todo["updated"],
+                "total_errors": stats_to_todo["errors"],
+            }
+        elif args.sync_direction == "remote-to-orgplan":
+            orgplan_tasks = orgplan_parser.parse_tasks()
+            todo_tasks = backend.get_tasks(task_list["id"])
+            stats_to_orgplan = sync_engine.sync_todo_to_orgplan(orgplan_tasks, todo_tasks)
+            if not config.dry_run:
+                orgplan_parser.save()
+                logger.info("Saved orgplan changes")
+            stats = {
+                "orgplan_to_todo": {"created": 0, "updated": 0, "skipped": 0, "errors": 0},
+                "todo_to_orgplan": stats_to_orgplan,
+                "total_created": stats_to_orgplan["created"],
+                "total_updated": stats_to_orgplan["updated"],
+                "total_errors": stats_to_orgplan["errors"],
+            }
+        else:
+            stats = sync_engine.sync_bidirectional()
 
         # Print summary
         logger.info("")
