@@ -210,7 +210,7 @@ class GoogleTasksBackend(TaskBackend):
             self.credentials = flow.run_local_server(port=0)
             self._save_credentials()
 
-            print("\n✓ Authentication successful!")
+            print("\nAuthentication successful!")
             print("Tokens have been saved for future use.\n")
             self.logger.info("Authenticated using OAuth 2.0 flow")
         except Exception as e:

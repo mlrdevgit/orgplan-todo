@@ -213,13 +213,7 @@ python -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
 
-# Run the full test set used in development
-python -m unittest \
-  test_bidirectional.py test_parse.py test_phase3.py test_phase4.py \
-  tests/test_google_tasks.py tests/test_multi_backend.py tests/test_orgplan_due.py \
-  tests/test_orgplan_integration.py tests/test_sync_direction.py tests/test_sync_mock.py
-
-# Or use discovery once PYTHONPATH is set
+# Run the full test suite
 python -m unittest discover -s tests
 ```
 
