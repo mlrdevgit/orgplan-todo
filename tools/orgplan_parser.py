@@ -39,7 +39,7 @@ class OrgplanParser:
     """Parser for orgplan markdown files."""
 
     # Regex patterns
-    STATUS_PATTERN = re.compile(r"\[(DONE|PENDING|DELEGATED)\]")
+    STATUS_PATTERN = re.compile(r"\[(DONE|PENDING|DELEGATED|CANCELED)\]")
     PRIORITY_PATTERN = re.compile(r"#p(\d+)")
     TIME_ESTIMATE_PATTERN = re.compile(r"#\d+[hd]")
     BLOCKED_PATTERN = re.compile(r"#blocked")

@@ -76,5 +76,10 @@ class TestOrgplanIntegration(unittest.TestCase):
             self.assertEqual(task.description, "Task")
             self.assertEqual(task.priority, 1)
 
+            # Test canceled status
+            task = parser._parse_task_line("- [CANCELED] Blog about Siri and To Do", 3)
+            self.assertEqual(task.description, "Blog about Siri and To Do")
+            self.assertEqual(task.status, "CANCELED")
+
 if __name__ == "__main__":
     unittest.main()
