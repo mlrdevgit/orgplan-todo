@@ -15,8 +15,8 @@ This guide explains how to switch between Microsoft To Do and Google Tasks backe
 
 orgplan-todo supports two task backends:
 
-- **Microsoft To Do**: Full-featured with priority support
-- **Google Tasks**: Simpler, OAuth-only authentication
+- **Microsoft To Do**: Supports priority sync, application and delegated authentication modes
+- **Google Tasks**: OAuth 2.0 authentication, no admin consent required, integrates with Google ecosystem
 
 **Key Features:**
 - Tasks can have **both** ID markers (Microsoft and Google)
@@ -288,8 +288,8 @@ python tools/sync.py --backend google --todo-list "Orgplan 2025"  # Google
 
 **Solution:**
 ```bash
-# Microsoft: Clear MSAL cache
-rm -rf .tokens/msal_cache.bin
+# Microsoft: Clear token cache
+rm -rf .tokens/tokens.json
 
 # Google: Clear OAuth tokens
 rm -rf .tokens/google_tokens.json

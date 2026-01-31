@@ -86,8 +86,9 @@ Read through README and understand the system.
 Define goals for the upcoming week.
 EOF
 
-# 5. Setup Microsoft Graph API (see GRAPH_API_SETUP.md)
-# Follow the guide to get credentials
+# 5. Setup your backend credentials:
+#    - Microsoft To Do: see GRAPH_API_SETUP.md
+#    - Google Tasks: see GOOGLE_TASKS_SETUP.md
 
 # 6. Configure .env file
 cp .env.example .env
@@ -162,17 +163,19 @@ nano 2025/12-notes.md
 - [ ] Team standup meeting
 - [ ] Complete project proposal
 
-# 2. Sync to To Do
+# 2. Sync to your task backend
 python tools/sync.py --todo-list "Orgplan 2025"
+# Or for Google Tasks:
+# python tools/sync.py --backend google --todo-list "My Tasks"
 
-# 3. Check To Do app on mobile/desktop
+# 3. Check your task app on mobile/desktop
 # Tasks are now available on all devices
 ```
 
 ### Evening Routine
 
 ```bash
-# 1. Mark tasks complete in To Do app
+# 1. Mark tasks complete in your task app
 # (Throughout the day on any device)
 
 # 2. Sync back to orgplan
@@ -547,5 +550,7 @@ python tools/sync.py --todo-list "Orgplan 2025" -v --log-file recovery.log
 
 See also:
 - [Troubleshooting Guide](TROUBLESHOOTING.md)
-- [Graph API Setup](GRAPH_API_SETUP.md)
+- [Microsoft To Do Setup](GRAPH_API_SETUP.md)
+- [Google Tasks Setup](GOOGLE_TASKS_SETUP.md)
+- [Backend Migration Guide](BACKEND_MIGRATION.md)
 - [Main README](../README.md)

@@ -148,7 +148,7 @@ class Config:
 @dataclass
 class OrgplanTask:
     title: str
-    status: Optional[str]        # "DONE", "PENDING", "DELEGATED"
+    status: Optional[str]        # "DONE", "PENDING", "DELEGATED", "CANCELED"
     priority: Optional[str]      # "p1", "p2", "p3"
     time_estimate: Optional[str] # "1h", "2h", "1d"
     blocked: bool
@@ -260,7 +260,7 @@ class TaskItem:
 **Features**:
 - Full priority support
 - Task body/notes
-- Token caching in `msal_cache.bin`
+- Token caching in `.tokens/tokens.json`
 
 **API Mapping**:
 ```python
@@ -547,9 +547,9 @@ Limitations:
 
 ### Credential Storage
 
-- **Microsoft**: Client secret in `.env` (0o600 permissions)
-- **Google**: OAuth tokens in `.tokens/` (0o700 directory, 0o600 files)
-- **Cache**: MSAL cache encrypted by library
+- **Microsoft**: Client secret in `.env`, delegated tokens in `.tokens/tokens.json` (0o600 permissions)
+- **Google**: OAuth tokens in `.tokens/google_tokens.json` (0o600 permissions)
+- **Token directory**: `.tokens/` created with restrictive permissions
 
 ### Best Practices
 
@@ -599,8 +599,9 @@ Limitations:
    - Conflict resolution UI
    - Bi-directional priority (custom mapping for Google)
    - Subtasks/checklist items
-   - Due dates
    - Attachments
+
+   *Note:* Due dates and one-way sync are already implemented.
 
 3. **Performance**:
    - Parallel API calls

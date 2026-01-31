@@ -1,12 +1,18 @@
 # Orgplan-Todo Synchronization Project Plan
 
+> **Note:** This document was the original project plan written before multi-backend
+> support was added. The project now supports both **Microsoft To Do** and
+> **Google Tasks** as backends. See [PLAN_GOOGLE_TASKS.md](PLAN_GOOGLE_TASKS.md)
+> for the Google Tasks implementation plan and [README.md](README.md) for
+> current documentation.
+
 ## Project Overview
 
-This project provides Python scripts to synchronize tasks between an orgplan productivity system (plain text markdown files) and Microsoft To Do via the Graph API.
+This project provides Python scripts to synchronize tasks between an orgplan productivity system (plain text markdown files) and cloud task management services (Microsoft To Do and Google Tasks).
 
 **Key Principles:**
 - Bidirectional synchronization
-- Orgplan detail sections take precedence over To Do notes
+- Orgplan detail sections take precedence over backend notes
 - Graceful conflict resolution via dedicated task
 - Configuration-driven execution
 - Suitable for manual or automated (cron) execution
@@ -66,7 +72,7 @@ Each monthly file (e.g., `2025/12-notes.md`) follows this structure:
 ```
 
 **Components:**
-- `[STATUS]`: Optional - `[DONE]`, `[PENDING]`, or `[DELEGATED]`
+- `[STATUS]`: Optional - `[DONE]`, `[PENDING]`, `[DELEGATED]`, or `[CANCELED]`
 - Priority tags: `#p1`, `#p2`, `#p3`, etc.
 - Time estimates: `#1h`, `#2h`, `#1d`, etc. (ignored by sync)
 - `#blocked`: Indicates blocked task (ignored by sync)
@@ -434,45 +440,44 @@ python tools/sync.py --todo-list "Orgplan 2025"
 
 ## Future Enhancements
 
+### Implemented Since Original Plan
+
+- ✅ **Microsoft Graph API Setup Guide** - See docs/GRAPH_API_SETUP.md
+- ✅ **Due Date Support** - DEADLINE, SCHEDULED, and plain timestamp markers
+- ✅ **Google Tasks Integration** - Full backend with OAuth 2.0 (see PLAN_GOOGLE_TASKS.md)
+- ✅ **One-way Sync** - `--sync-direction` flag for orgplan-to-remote or remote-to-orgplan
+- ✅ **CANCELED Status** - Tasks marked `[CANCELED]` are synced as completed
+
 ### Planned for Future Iterations
 
-1. **Microsoft Graph API Setup Guide**
-   - Step-by-step app registration
-   - Permission configuration
-   - Authentication flow details
-
-2. **Multiple To Do Lists**
+1. **Multiple To Do Lists**
    - Support syncing to different lists based on tags or priorities
    - Map projects to separate lists
 
-3. **Due Date Support**
-   - Parse and sync due dates from orgplan
-   - Format TBD (e.g., `@due:2025-12-31` or similar)
-
-4. **Recurring Tasks**
-   - Handle recurring tasks in To Do
+2. **Recurring Tasks**
+   - Handle recurring tasks in backend
    - Smart handling in orgplan
 
-5. **Attachments/Links**
-   - Sync links from detail sections to To Do
-   - Handle To Do attachments
+3. **Attachments/Links**
+   - Sync links from detail sections to backend
+   - Handle backend attachments
 
-6. **Archive Handling**
-   - Option to archive completed To Do tasks
+4. **Archive Handling**
+   - Option to archive completed backend tasks
    - Keep orgplan as source of truth for history
 
-7. **Multi-file Sync**
+5. **Multi-file Sync**
    - Option to sync multiple months
    - Aggregate view across time periods
 
-8. **Web Dashboard**
+6. **Web Dashboard**
    - Visual conflict resolution UI
    - Sync history and statistics
    - Manual sync trigger
 
-9. **Other Productivity Systems**
+7. **Additional Backends**
    - Todoist integration
-   - Google Tasks integration
+   - Trello integration
    - Calendar integration for due dates
 
 ---
@@ -480,11 +485,14 @@ python tools/sync.py --todo-list "Orgplan 2025"
 ## Technical Stack
 
 **Core Dependencies:**
-- Python 3.9+
+- Python 3.8+
 - `msal` - Microsoft Authentication Library
 - `requests` - HTTP client for Graph API
 - `python-dotenv` - Environment variable management
-- `click` or `argparse` - CLI argument parsing
+- `argparse` - CLI argument parsing (stdlib)
+- `google-auth-oauthlib` - Google OAuth 2.0 flow
+- `google-auth-httplib2` - HTTP library for Google APIs
+- `google-api-python-client` - Google Tasks API client
 
 **Optional Dependencies:**
 - `pytest` - Testing framework

@@ -31,7 +31,7 @@ This checklist covers manual testing scenarios for both Microsoft To Do and Goog
 
 - [ ] Run with application mode: `python tools/sync.py --todo-list "Test List" --dry-run`
 - [ ] Verify authentication succeeds
-- [ ] Check MSAL cache created: `.tokens/msal_cache.bin`
+- [ ] Check token cache created: `.tokens/tokens.json`
 - [ ] Verify no interactive prompts
 
 ### Authentication - Delegated Mode

@@ -6,11 +6,12 @@ Synchronize tasks between your orgplan productivity system and Microsoft To Do o
 
 - **Multiple backends**: Choose between Microsoft To Do or Google Tasks
 - **Bidirectional sync** between orgplan markdown files and your task backend
+- **One-way sync** option: sync only orgplan-to-remote or remote-to-orgplan via `--sync-direction`
 - **Flexible authentication**:
   - Microsoft: Application (client credentials) or Delegated (user login)
   - Google: OAuth 2.0 with interactive login
 - **Intelligent task matching** using unique IDs and title fallback
-- **Status synchronization** in both directions (DONE ↔ Completed, PENDING/Active)
+- **Status synchronization** in both directions (DONE, DELEGATED, CANCELED ↔ Completed; PENDING/Active)
 - **Priority mapping** for Microsoft To Do (#p1 ↔ High, #p2 ↔ Normal, #p3+ ↔ Low)
 - **New task creation** from either system
 - **Detail section sync** with orgplan taking precedence
@@ -121,6 +122,7 @@ Configuration can be provided via (in order of precedence):
 | Allow Prompt | `--no-prompt` | - | No | `true` |
 | Orgplan Directory | `--orgplan-dir` | `ORGPLAN_DIR` | No | `.` (current) |
 | Month | `--month` | `SYNC_MONTH` | No | Current month |
+| Sync Direction | `--sync-direction` | - | No | `both` |
 | Log File | `--log-file` | `LOG_FILE` | No | None |
 
 #### Microsoft To Do Options
@@ -141,57 +143,55 @@ Configuration can be provided via (in order of precedence):
 
 ## Usage
 
-### Basic Sync (Application Mode)
+### Microsoft To Do
 
 ```bash
+# Application mode (client credentials, no user interaction)
 python tools/sync.py --todo-list "Orgplan 2025"
-```
 
-### Delegated Mode (User Login)
-
-```bash
-# First-time: Interactive login required
+# Delegated mode (first-time: interactive login required)
 python tools/sync.py --todo-list "Orgplan 2025" --auth-mode delegated
 
-# Subsequent runs: Uses cached tokens
+# Subsequent delegated runs use cached tokens
 python tools/sync.py --todo-list "Orgplan 2025" --auth-mode delegated
-```
-
-### Dry Run (Preview Changes)
-
-```bash
-python tools/sync.py --todo-list "Orgplan 2025" --dry-run
-```
-
-### Sync Specific Month
-
-```bash
-python tools/sync.py --todo-list "Orgplan 2025" --month 2025-11
-```
-
-### With Logging
-
-```bash
-python tools/sync.py --todo-list "Orgplan 2025" --log-file sync.log
 ```
 
 ### Google Tasks
 
 ```bash
-# First-time: Interactive login required
+# First-time: Interactive login required (browser opens for OAuth)
 python tools/sync.py --backend google --todo-list "My Tasks"
 
-# Use primary task list (default)
+# Use primary task list (default when no list specified)
 python tools/sync.py --backend google
 
 # Subsequent runs: Uses cached tokens
 python tools/sync.py --backend google
 ```
 
+### Common Options
+
+```bash
+# Dry run - preview changes without applying
+python tools/sync.py --todo-list "Orgplan 2025" --dry-run
+
+# Sync a specific month
+python tools/sync.py --todo-list "Orgplan 2025" --month 2025-11
+
+# Enable verbose logging to file
+python tools/sync.py --todo-list "Orgplan 2025" -v --log-file sync.log
+
+# One-way sync (orgplan to remote only)
+python tools/sync.py --todo-list "Orgplan 2025" --sync-direction orgplan-to-remote
+
+# One-way sync (remote to orgplan only)
+python tools/sync.py --todo-list "Orgplan 2025" --sync-direction remote-to-orgplan
+```
+
 ### Automated Sync (Cron Job)
 
 ```bash
-# For delegated mode (Microsoft) or Google Tasks, use --no-prompt to prevent blocking
+# Microsoft To Do (delegated mode) - use --no-prompt to prevent blocking
 python tools/sync.py --todo-list "Orgplan 2025" --auth-mode delegated --no-prompt --log-file sync.log
 
 # Google Tasks cron example
@@ -270,7 +270,7 @@ Each monthly file starts with a `# TODO List` section:
 - [STATUS] #priority Task description DEADLINE: <YYYY-MM-DD>
 ```
 
-- **Status**: `[DONE]`, `[PENDING]`, `[DELEGATED]` (optional)
+- **Status**: `[DONE]`, `[PENDING]`, `[DELEGATED]`, `[CANCELED]` (optional)
 - **Priority**: `#p1`, `#p2`, `#p3`, etc. (optional)
 - **Time estimates**: `#1h`, `#2h`, `#1d` (ignored by sync)
 - **#blocked**: Indicates blocked task (ignored by sync)
@@ -284,7 +284,7 @@ Each monthly file starts with a `# TODO List` section:
 - Status changes → Update completion status
 - Priority changes → Update importance (Microsoft only)
 - Title changes → Update task title
-- `[DONE]` or `[DELEGATED]` → Mark completed in backend
+- `[DONE]`, `[DELEGATED]`, or `[CANCELED]` → Mark completed in backend
 - Due dates → Synced to backend due dates
 - Tasks with existing backend ID markers are matched by ID
 - Tasks without ID are matched by title
@@ -346,13 +346,12 @@ cd orgplan-todo
 .\tools\setup_tasksched.ps1 -TodoList "Orgplan 2025" -ScheduleMinutes 30
 ```
 
-This script will:
+The Windows script will:
 - Create a Windows Scheduled Task
 - Set up logging to `sync.log`
 - Handle execution parameters
 
-
-This script will:
+The cron script will:
 - Validate your `.env` file exists
 - Create a cron job with your specified schedule
 - Set up logging to `sync.log`
@@ -424,10 +423,12 @@ For detailed troubleshooting, see [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
 ## Documentation
 
-- 📖 **[Microsoft Graph API Setup Guide](docs/GRAPH_API_SETUP.md)** - Complete setup instructions
-- 🔧 **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)** - Common issues and solutions
-- 📋 **[Example Workflows](docs/WORKFLOWS.md)** - Daily, weekly, and advanced usage patterns
-- 📝 **[Project Plan](PLAN.md)** - Complete technical specification
+- **[Microsoft To Do Setup Guide](docs/GRAPH_API_SETUP.md)** - Azure app registration and Graph API setup
+- **[Google Tasks Setup Guide](docs/GOOGLE_TASKS_SETUP.md)** - Google Cloud OAuth 2.0 setup
+- **[Backend Migration Guide](docs/BACKEND_MIGRATION.md)** - Switching between backends
+- **[Architecture](docs/ARCHITECTURE.md)** - Multi-backend design and extension points
+- **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)** - Common issues and solutions
+- **[Example Workflows](docs/WORKFLOWS.md)** - Daily, weekly, and advanced usage patterns
 
 ### Quick Commands
 
@@ -460,25 +461,25 @@ TODO_LIST_NAME="Orgplan 2025" tools/setup_cron.sh
 | **Completion Status** | ✅ Yes | ✅ Yes |
 | **Multiple Lists** | ✅ Yes | ✅ Yes |
 | **ID Marker** | `ms-todo-id` | `google-tasks-id` |
-| **Token Storage** | `.tokens/msal_cache.bin` | `.tokens/google_tokens.json` |
+| **Token Storage** | `.tokens/tokens.json` | `.tokens/google_tokens.json` |
+| **Due Date Sync** | ✅ Yes | ✅ Yes |
+| **One-way Sync** | ✅ Yes | ✅ Yes |
 | **Cron Support** | ✅ Yes | ✅ Yes |
 | **Default List** | Must specify | Uses primary if not specified |
 
 **Choosing a Backend:**
-- **Microsoft To Do**: Best if you need priority support, work in enterprise environment, or prefer Microsoft ecosystem
-- **Google Tasks**: Best if you use personal Google account, prefer simpler OAuth setup, don't need priority levels
+- **Microsoft To Do**: Supports priority sync, offers both application (headless) and delegated auth modes, good for enterprise environments
+- **Google Tasks**: No admin consent required, straightforward OAuth setup, integrates with Google ecosystem; does not support priority levels
 
 ## Development Roadmap
 
-See [PLAN.md](PLAN.md) for the complete project plan.
-
 ### Phase 1: Foundation (MVP) ✓
-- Orgplan → To Do sync
+- Orgplan → Microsoft To Do sync
 - Basic task matching
 - Console logging
 
 ### Phase 2: Bidirectional Sync ✓
-- To Do → Orgplan sync
+- Backend → Orgplan sync
 - Task ID markers with fallback to title matching
 - Detail section sync (orgplan takes precedence)
 - Status, priority, and title sync both directions
@@ -495,9 +496,7 @@ See [PLAN.md](PLAN.md) for the complete project plan.
 - File-based locking for concurrent prevention
 - Cron setup script (tools/setup_cron.sh)
 - Windows Task Scheduler script (tools/setup_tasksched.ps1)
-- Automated lock cleanup
-
-- Stale lock detection
+- Stale lock detection and automated cleanup
 - Production-ready for scheduled execution
 
 ### Phase 5: Polish & Documentation ✓
@@ -506,7 +505,15 @@ See [PLAN.md](PLAN.md) for the complete project plan.
 - Example workflows documentation (docs/WORKFLOWS.md)
 - Configuration validation command (--validate-config)
 - Comprehensive README with quick commands
-- Production-ready with full documentation
+
+### Phase 6: Multi-Backend & Google Tasks ✓
+- Pluggable backend architecture with abstract base classes
+- Google Tasks backend with OAuth 2.0 authentication
+- Multiple ID markers (tasks can link to both backends)
+- Backend migration guide and architecture documentation
+- Due date sync support
+- One-way sync option (--sync-direction)
+- CANCELED status support
 
 ## Contributing
 
