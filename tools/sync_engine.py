@@ -429,7 +429,13 @@ class SyncEngine:
 
         # Check status
         desired_status = self._map_todo_status_to_orgplan(todo_task.status)
-        if desired_status != orgplan_task.status:
+
+        # Special handling for CANCELED tasks:
+        # If local is CANCELED and remote is DONE, preserve local CANCELED.
+        # This is because most backends don't have a CANCELED state and treat it as completed.
+        if (orgplan_task.status == "CANCELED" or orgplan_task.status == "DELEGATED") and desired_status == "DONE":
+            pass
+        elif desired_status != orgplan_task.status:
             changes.append(f"status: {orgplan_task.status} -> {desired_status}")
             if not self.dry_run:
                 self.orgplan_parser.update_task_status(orgplan_task, desired_status)
