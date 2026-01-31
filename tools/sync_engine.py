@@ -1,6 +1,7 @@
 """Sync engine for orgplan and task backends."""
 
 import logging
+import re
 from typing import Optional
 
 from backends.base import TaskBackend, TaskItem
@@ -30,6 +31,34 @@ class SyncEngine:
         self.task_list_id = task_list_id
         self.dry_run = dry_run
         self.logger = logging.getLogger(__name__)
+
+        # Patterns used to strip backend ID markers from detail sections
+        self._id_marker_patterns = [
+            OrgplanParser.MS_TODO_ID_PATTERN,
+            OrgplanParser.GOOGLE_TASKS_ID_PATTERN,
+        ]
+
+    def _extract_notes_from_detail_section(self, detail_section: str) -> Optional[str]:
+        """Extract plain notes text from a detail section, stripping backend ID markers.
+
+        Args:
+            detail_section: Raw detail section content (may contain ID markers)
+
+        Returns:
+            Clean notes text, or None if no meaningful content exists
+        """
+        if not detail_section or not detail_section.strip():
+            return None
+
+        lines = detail_section.split("\n")
+        notes_lines = []
+        for line in lines:
+            if any(p.search(line) for p in self._id_marker_patterns):
+                continue
+            notes_lines.append(line)
+
+        notes = "\n".join(notes_lines).strip()
+        return notes if notes else None
 
     def sync_orgplan_to_todo(self) -> dict:
         """Sync tasks from orgplan to Microsoft To Do (Phase 1 MVP).
@@ -135,12 +164,13 @@ class SyncEngine:
 
         try:
             # Create TaskItem for new task
+            notes = self._extract_notes_from_detail_section(orgplan_task.detail_section)
             task_item = TaskItem(
                 id="",  # Will be assigned by backend
                 title=title,
                 status="active",
                 importance=importance,
-                body=None,
+                body=notes,
                 due_date=orgplan_task.due_date,
             )
 
@@ -193,6 +223,13 @@ class SyncEngine:
             updates["due_date"] = orgplan_task.due_date
             changes.append(f"due_date: {todo_task.due_date} -> {orgplan_task.due_date}")
 
+        # Check notes/body
+        orgplan_notes = self._extract_notes_from_detail_section(orgplan_task.detail_section)
+        remote_body = todo_task.body.strip() if todo_task.body else None
+        if (orgplan_notes or remote_body) and orgplan_notes != remote_body:
+            updates["body"] = orgplan_notes
+            changes.append(f"body: '{remote_body or ''}' -> '{orgplan_notes or ''}'")
+
         if not updates:
             self.logger.debug(f"Task '{orgplan_task.description}' is up to date")
             return False
@@ -212,7 +249,7 @@ class SyncEngine:
                 title=updates.get("title", todo_task.title),
                 status=updates.get("status", todo_task.status),
                 importance=updates.get("importance", todo_task.importance),
-                body=todo_task.body,
+                body=updates.get("body", todo_task.body),
                 due_date=updates.get("due_date", todo_task.due_date),
             )
 
@@ -395,10 +432,9 @@ class SyncEngine:
 
             # Add body to detail section if present and not empty
             if todo_task.body and todo_task.body.strip():
-                # We need to update the detail section with the body
-                # For now, we'll just add the ID marker
-                # The body content will be handled in detail section sync
-                pass
+                self.orgplan_parser.update_detail_section_body(
+                    orgplan_task, todo_task.body.strip()
+                )
 
             self.logger.info(f"  Created orgplan task")
             return True
@@ -460,17 +496,19 @@ class SyncEngine:
                     )
                 modified = True
 
-        # Sync detail section body (only if orgplan detail section is empty)
+        # Sync detail section body (only if orgplan detail section has no notes content)
         backend_id_attr = self.backend.id_marker_prefix.replace("-", "_")
+        orgplan_notes = self._extract_notes_from_detail_section(orgplan_task.detail_section)
 
-        if todo_task.body and todo_task.body.strip() and not orgplan_task.detail_section.strip():
-            changes.append("adding backend notes to empty detail section")
+        if todo_task.body and todo_task.body.strip() and not orgplan_notes:
+            changes.append("adding backend notes to detail section")
             if not self.dry_run:
-                # The detail section sync would happen here
-                # For now, we just ensure the backend ID is present
                 if not getattr(orgplan_task, backend_id_attr, None):
                     id_kwargs = {backend_id_attr: todo_task.id}
                     self.orgplan_parser.add_detail_section(orgplan_task, **id_kwargs)
+                self.orgplan_parser.update_detail_section_body(
+                    orgplan_task, todo_task.body.strip()
+                )
                 modified = True
 
         if not changes:
