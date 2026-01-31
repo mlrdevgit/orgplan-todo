@@ -465,6 +465,77 @@ class OrgplanParser:
                 self.lines.insert(insert_pos, id_marker)
                 setattr(task, id_name, id_value)
 
+    def update_detail_section_body(self, task: OrgplanTask, body: str):
+        """Add or replace body text in a task's detail section.
+
+        Preserves backend ID markers and replaces any existing non-marker
+        content with the new body text.
+
+        Args:
+            task: Task whose detail section to update
+            body: New body text to set
+        """
+        if not self.lines:
+            self.load()
+
+        section_header = f"# {task.description}"
+        section_start = -1
+
+        for i, line in enumerate(self.lines):
+            if line.strip() == section_header:
+                section_start = i
+                break
+
+        if section_start == -1:
+            return
+
+        # Find the bounds of the section and partition into markers vs body
+        section_end = len(self.lines)
+        for i in range(section_start + 1, len(self.lines)):
+            if self.lines[i].startswith("# "):
+                section_end = i
+                break
+
+        # Identify the last ID marker line so we can insert body after it
+        last_marker_pos = section_start
+        id_patterns = [self.MS_TODO_ID_PATTERN, self.GOOGLE_TASKS_ID_PATTERN]
+        for i in range(section_start + 1, section_end):
+            if any(p.search(self.lines[i]) for p in id_patterns):
+                last_marker_pos = i
+
+        # Remove old non-marker, non-blank content lines between markers and section end
+        body_start = last_marker_pos + 1
+        # Remove existing body lines (everything from body_start to section_end)
+        del self.lines[body_start:section_end]
+
+        # Insert new body content
+        body_lines = body.strip().split("\n")
+        for idx, bline in enumerate(body_lines):
+            self.lines.insert(body_start + idx, bline)
+        # Add blank line separator after markers if needed
+        if body_lines and last_marker_pos > section_start:
+            self.lines.insert(body_start, "")
+
+        # Update the in-memory detail_section
+        task.detail_section = self._rebuild_detail_section(task)
+
+    def _rebuild_detail_section(self, task: OrgplanTask) -> str:
+        """Re-read the detail section content from self.lines for a task."""
+        section_header = f"# {task.description}"
+        in_section = False
+        section_lines = []
+
+        for line in self.lines:
+            if line.strip() == section_header:
+                in_section = True
+                continue
+            elif in_section:
+                if line.startswith("# "):
+                    break
+                section_lines.append(line)
+
+        return "\n".join(section_lines).strip()
+
     def _parse_timestamps(
         self, text: str
     ) -> tuple[list[datetime.date | datetime.datetime], list[datetime.date | datetime.datetime], list[datetime.date | datetime.datetime]]:
