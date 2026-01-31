@@ -568,12 +568,14 @@ WARNING: Attempt 3/4 failed: Server error 503. Retrying in 4.0s...
 ERROR: All 4 attempts failed
 ```
 
-**Cause:** Microsoft API temporarily unavailable
+**Cause:** Backend API temporarily unavailable
 
 **Solution:**
 - This is normal for transient issues
 - Wait a few minutes and retry
-- Check [Microsoft Service Health](https://portal.office.com/servicestatus)
+- Check service status:
+  - Microsoft: [Microsoft Service Health](https://portal.office.com/servicestatus)
+  - Google: [Google Workspace Status](https://www.google.com/appsstatus)
 - If persistent, may be rate limiting
 
 ## Performance Issues
@@ -636,15 +638,24 @@ python tools/sync.py --todo-list "Orgplan 2025" -v --log-file debug.log
 ### Check Configuration
 
 ```bash
-# Verify .env file loads correctly
-python -c "from dotenv import load_dotenv; load_dotenv(); import os; print('Client ID:', os.getenv('MS_CLIENT_ID')[:10]  + '...')"
+# Validate all settings
+python tools/sync.py --validate-config
+
+# Verify .env file loads correctly (Microsoft)
+python -c "from dotenv import load_dotenv; load_dotenv(); import os; print('Backend:', os.getenv('TASK_BACKEND', 'microsoft')); print('MS Client ID:', (os.getenv('MS_CLIENT_ID') or 'not set')[:10])"
+
+# Verify .env file loads correctly (Google)
+python -c "from dotenv import load_dotenv; load_dotenv(); import os; print('Backend:', os.getenv('TASK_BACKEND', 'microsoft')); print('Google Client ID:', (os.getenv('GOOGLE_CLIENT_ID') or 'not set')[:10])"
 ```
 
 ### Test Authentication Only
 
 ```bash
-# Quick test to verify credentials
+# Quick test to verify credentials (Microsoft)
 python tools/sync.py --todo-list "Orgplan 2025" --dry-run
+
+# Quick test to verify credentials (Google)
+python tools/sync.py --backend google --dry-run
 ```
 
 ### Inspect Lock File
@@ -680,7 +691,7 @@ If you've tried the above and still have issues:
    python --version
 
    # Check installed packages
-   pip list | grep -E "msal|requests|dotenv"
+   pip list | grep -E "msal|requests|dotenv|google"
    ```
 
 2. **Create a GitHub issue** with:

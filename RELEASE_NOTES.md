@@ -110,11 +110,25 @@ python tools/sync.py --backend google --todo-list "Orgplan 2025"
 
 See [BACKEND_MIGRATION.md](docs/BACKEND_MIGRATION.md) for detailed migration instructions.
 
+## Recent Additions
+
+### Due Date Sync
+- Bidirectional due date synchronization using orgplan timestamp markers
+- Supports `DEADLINE: <YYYY-MM-DD>`, `SCHEDULED: <YYYY-MM-DD>`, and plain `<YYYY-MM-DD>`
+
+### One-Way Sync
+- `--sync-direction orgplan-to-remote` to push changes only to the backend
+- `--sync-direction remote-to-orgplan` to pull changes only from the backend
+
+### CANCELED Status
+- Tasks marked `[CANCELED]` in orgplan are synced as completed to the backend
+- Handled alongside `[DONE]` and `[DELEGATED]` in the fallback parser
+
 ## ⚠️ Breaking Changes
 
 **None** - This release is fully backward compatible with existing Microsoft To Do setups.
 
-## 🐛 Known Issues
+## Known Issues
 
 ### Google Tasks Limitations
 - **No priority support**: Priority tags (#p1, #p2, #p3) are ignored when using Google Tasks
